@@ -29,7 +29,7 @@ type Storage interface {
 }
 ```
 
-`Write` should provide a way that applies a series of modifications to the inner state which is, in this situation, a badger instance.
+`Write` should provide a way that applies a series of modifications to the inner state which is, in this ::`situation, a badger instance.
 
 `Reader` should return a `StorageReader` that supports key/value's point get and scan operations on a snapshot.
 

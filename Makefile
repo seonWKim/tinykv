@@ -1,5 +1,3 @@
-SHELL := /bin/bash
-PROJECT=tinykv
 GOPATH ?= $(shell go env GOPATH)
 
 # Ensure GOPATH is set before running build process.
