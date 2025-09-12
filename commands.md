@@ -5,4 +5,12 @@
 - move between tab, windows: Ctrl + hjlk
 - split window vertically : :vsp 
 - scroll up or down : Ctrl + u/d 
+- navigate code: 
+  - gd: go to definition 
+  - gr: list of references 
+  - gD: jump to the declaration of a symbol 
+  - gi: go to implementation 
+  - K : shows documentation and type information 
+- Select all : gg + yG 
+- delete All : gg + dG 
 
