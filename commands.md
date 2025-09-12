@@ -15,3 +15,5 @@
 - delete All : gg + dG 
 - Search for specific keyword: <leader>sw
 - Save file as : :saveas <file_name>
+- Switch between iterm windows : Cmd + ` or Cmd + Shift + ` 
+- Focus open file on the explorer : <leader>E 
