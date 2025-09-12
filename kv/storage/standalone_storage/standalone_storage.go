@@ -49,7 +49,7 @@ type StandAloneStorageReader struct {
 	iterCount int
 }
 
-func (sasr *StandAloneStorageReader) GetCF(cf string, key []bytes) ([]bytes, error) {
+func (sasr *StandAloneStorageReader) GetCF(cf string, key []bytes) ([]byte, error) {
 	// Your code here
 	return nil, nil
 }

@@ -13,4 +13,5 @@
   - K : shows documentation and type information 
 - Select all : gg + yG 
 - delete All : gg + dG 
-
+- Search for specific keyword: <leader>sw
+- Save file as : :saveas <file_name>
