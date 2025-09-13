@@ -1,13 +1,16 @@
 package main
 
-import {
-  "fmt"
-	"github.com/Connor1996/badger"
-}
+import (
+	"fmt"
+	"log"
+	"os"
+)
 
 func main() {
-
 	fmt.Println("Start!!")
 
-fmt.Println("hello world")
+	_, err := os.MkdirTemp("", "badger")
+	if err != nil {
+		log.Fatal(err)
+	}
 }
