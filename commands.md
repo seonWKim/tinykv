@@ -19,3 +19,4 @@
 - Switch between iterm windows : Cmd + ` or Cmd + Shift + ` 
 - Focus open file on the explorer : <leader>E 
 - Auto import: <leader>ca
+- Quit all: qa
