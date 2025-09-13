@@ -8,17 +8,26 @@ import (
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
 )
 
+const (
+	CFSeparator = "_"
+)
+
 // StandAloneStorage is an implementation of `Storage` for a single-node TinyKV instance. It does not
 // communicate with other nodes and all data is stored locally.
 type StandAloneStorage struct {
 	path string
-	db   *badger.DB
+
+	db *badger.DB
 }
 
 func NewStandAloneStorage(conf *config.Config) *StandAloneStorage {
 	return &StandAloneStorage{
 		path: conf.DBPath,
 	}
+}
+
+func (s *StandAloneStorage) buildKey(cf string, key []byte) []byte {
+	return append([]byte(cf+CFSeparator), key...)
 }
 
 func (s *StandAloneStorage) Start() error {
@@ -52,6 +61,7 @@ func (s *StandAloneStorage) Stop() error {
 func (s *StandAloneStorage) Reader(ctx *kvrpcpb.Context) (storage.StorageReader, error) {
 	// Your Code Here (1).
 
+	StandAloneStorageReader{}
 	return nil, nil
 }
 
@@ -65,13 +75,13 @@ type StandAloneStorageReader struct {
 	iterCount int
 }
 
-func (sasr *StandAloneStorageReader) GetCF(cf string, key []bytes) ([]byte, error) {
-	// Your code here
-	return nil, nil
+func (sasr *StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error) {
+	return engine_util.GetCF(sasr.inner.db, cf, key)
 }
 
 func (sasr *StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
-	return nil
+	txn := sasr.inner.db.NewTransaction(false)
+	return engine_util.NewCFIterator(cf, txn)
 }
 
 func (sasr *StandAloneStorageReader) Close() {
