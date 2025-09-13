@@ -80,14 +80,14 @@ type StandAloneStorageReader struct {
 	inner *StandAloneStorage
 }
 
-func (sasr StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error) {
-	return engine_util.GetCF(sasr.inner.db, cf, key)
+func (s StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error) {
+	return engine_util.GetCF(s.inner.db, cf, key)
 }
 
-func (sasr StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
-	txn := sasr.inner.db.NewTransaction(false)
+func (s StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
+	txn := s.inner.db.NewTransaction(false)
 	return engine_util.NewCFIterator(cf, txn)
 }
 
-func (sasr StandAloneStorageReader) Close() {
+func (s StandAloneStorageReader) Close() {
 }

@@ -44,6 +44,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// hello world
 	fmt.Println("Viewing...")
 	err = db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("key"))
