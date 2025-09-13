@@ -36,7 +36,11 @@ func (s *StandAloneStorage) Start() error {
 }
 
 func (s *StandAloneStorage) Stop() error {
-	// Your Code Here (1).
+	err := s.db.Close()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
