@@ -11,9 +11,11 @@
   - gD: jump to the declaration of a symbol 
   - gi: go to implementation 
   - K : shows documentation and type information 
-- Select all : gg + yG 
+- Select All and copy : gg + yG 
+- Select All : gg + V + G 
 - delete All : gg + dG 
 - Search for specific keyword: <leader>sw
 - Save file as : :saveas <file_name>
 - Switch between iterm windows : Cmd + ` or Cmd + Shift + ` 
 - Focus open file on the explorer : <leader>E 
+
