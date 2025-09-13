@@ -1,6 +1,8 @@
 package standalone_storage
 
 import (
+	"log"
+
 	"github.com/Connor1996/badger"
 	"github.com/pingcap-incubator/tinykv/kv/config"
 	"github.com/pingcap-incubator/tinykv/kv/storage"
@@ -8,15 +10,10 @@ import (
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
 )
 
-const (
-	CFSeparator = "_"
-)
-
 // StandAloneStorage is an implementation of `Storage` for a single-node TinyKV instance. It does not
 // communicate with other nodes and all data is stored locally.
 type StandAloneStorage struct {
 	path string
-
 	db *badger.DB
 }
 
@@ -24,10 +21,6 @@ func NewStandAloneStorage(conf *config.Config) *StandAloneStorage {
 	return &StandAloneStorage{
 		path: conf.DBPath,
 	}
-}
-
-func (s *StandAloneStorage) buildKey(cf string, key []byte) []byte {
-	return append([]byte(cf+CFSeparator), key...)
 }
 
 func (s *StandAloneStorage) Start() error {
@@ -61,29 +54,40 @@ func (s *StandAloneStorage) Stop() error {
 func (s *StandAloneStorage) Reader(ctx *kvrpcpb.Context) (storage.StorageReader, error) {
 	// Your Code Here (1).
 
-	StandAloneStorageReader{}
-	return nil, nil
+	reader := StandAloneStorageReader{s}
+	return reader, nil
 }
 
 func (s *StandAloneStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) error {
 	// Your Code Here (1).
+
+	writeBatch := engine_util.WriteBatch{}
+	for i := 0; i < len(batch); i++ {
+		b := batch[i]
+		writeBatch.SetCF(b.Cf(), b.Key(), b.Value())
+	}
+
+	err := writeBatch.WriteToDB(s.db)
+	if err != nil {
+		log.Fatal("Failed to Write: ", err)
+		return nil
+	}
+
 	return nil
 }
 
 type StandAloneStorageReader struct {
-	inner     *StandAloneStorage
-	iterCount int
+	inner *StandAloneStorage
 }
 
-func (sasr *StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error) {
+func (sasr StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error) {
 	return engine_util.GetCF(sasr.inner.db, cf, key)
 }
 
-func (sasr *StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
+func (sasr StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
 	txn := sasr.inner.db.NewTransaction(false)
 	return engine_util.NewCFIterator(cf, txn)
 }
 
-func (sasr *StandAloneStorageReader) Close() {
-	return
+func (sasr StandAloneStorageReader) Close() {
 }
