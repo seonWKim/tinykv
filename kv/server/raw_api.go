@@ -53,7 +53,7 @@ func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kv
 
 	err := server.storage.Write(&kvrpcpb.Context{}, mods)
 	if err != nil {
-		log.Println("Error on Put request, %v", err)
+		log.Printf("Error on Put request, %v", err)
 		return nil, err
 	}
 
@@ -74,7 +74,7 @@ func (server *Server) RawDelete(_ context.Context, req *kvrpcpb.RawDeleteRequest
 
 	err := server.storage.Write(&kvrpcpb.Context{}, mods)
 	if err != nil {
-		log.Println("Error on Delete request, %v", err)
+		log.Printf("Error on Delete request, %v", err)
 		return nil, err
 	}
 
@@ -86,7 +86,7 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 	// Your Code Here (1).
 	reader, err := server.storage.Reader(&kvrpcpb.Context{})
 	if err != nil {
-		log.Println("Error retrieving Reader, %v", err)
+		log.Printf("Error retrieving Reader, %v", err)
 		return nil, err
 	}
 
@@ -107,7 +107,7 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 		key := iter.Item().Key()
 		value, err := iter.Item().Value()
 		if err != nil {
-			log.Println("Error retrieving key: %v, err: %v", key, err)
+			log.Printf("Error retrieving key: %v, err: %v", key, err)
 			break
 		}
 
