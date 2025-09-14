@@ -2,7 +2,6 @@ package standalone_storage
 
 import (
 	"errors"
-	"log"
 
 	"github.com/Connor1996/badger"
 	"github.com/pingcap-incubator/tinykv/kv/config"
@@ -15,7 +14,7 @@ import (
 // communicate with other nodes and all data is stored locally.
 type StandAloneStorage struct {
 	path string
-	db *badger.DB
+	db   *badger.DB
 }
 
 func NewStandAloneStorage(conf *config.Config) *StandAloneStorage {
@@ -61,18 +60,16 @@ func (s *StandAloneStorage) Reader(ctx *kvrpcpb.Context) (storage.StorageReader,
 
 func (s *StandAloneStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) error {
 	writeBatch := engine_util.WriteBatch{}
-	for i := 0; i < len(batch); i++ {
-		b := batch[i]
-		writeBatch.SetCF(b.Cf(), b.Key(), b.Value())
+	for _, m := range batch {
+		switch d := m.Data.(type) {
+		case storage.Put:
+			writeBatch.SetCF(d.Cf, d.Key, d.Value)
+		case storage.Delete:
+			writeBatch.DeleteCF(d.Cf, d.Key)
+		}
 	}
 
-	err := writeBatch.WriteToDB(s.db)
-	if err != nil {
-		log.Printf("Error writing to DB, %v", err)
-		return err
-	}
-
-	return nil
+	return writeBatch.WriteToDB(s.db)
 }
 
 type StandAloneStorageReader struct {
