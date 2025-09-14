@@ -40,11 +40,10 @@ func main() {
 
 	fmt.Println("Commit")
 	err = txn.Commit()
-	if err != nil {
+	if err != nil {   
 		log.Fatal(err)
 	}
 
-	// hello world
 	fmt.Println("Viewing...")
 	err = db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("key"))
