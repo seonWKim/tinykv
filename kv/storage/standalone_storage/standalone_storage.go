@@ -1,8 +1,6 @@
 package standalone_storage
 
 import (
-	"errors"
-
 	"github.com/Connor1996/badger"
 	"github.com/pingcap-incubator/tinykv/kv/config"
 	"github.com/pingcap-incubator/tinykv/kv/storage"
@@ -68,7 +66,6 @@ func (s *StandAloneStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) 
 			writeBatch.DeleteCF(d.Cf, d.Key)
 		}
 	}
-
 	return writeBatch.WriteToDB(s.db)
 }
 
@@ -78,15 +75,10 @@ type StandAloneStorageReader struct {
 
 func (sasr StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error) {
 	val, err := engine_util.GetCF(sasr.inner.db, cf, key)
-	if errors.Is(err, badger.ErrKeyNotFound) {
-		return nil, storage.ErrNotFound
+	if err == badger.ErrKeyNotFound {
+		return nil, nil
 	}
-
-	// if val == nil {
-	//	return nil, storage.ErrNotFound
-	// }
-
-	return val, nil
+	return val, err
 }
 
 func (sasr StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
@@ -96,3 +88,4 @@ func (sasr StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
 
 func (sasr StandAloneStorageReader) Close() {
 }
+

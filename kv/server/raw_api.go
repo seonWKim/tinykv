@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"log"
 
 	"github.com/pingcap-incubator/tinykv/kv/storage"
@@ -23,11 +22,14 @@ func (server *Server) RawGet(context context.Context, req *kvrpcpb.RawGetRequest
 
 	value, err := reader.GetCF(req.Cf, req.Key)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return &kvrpcpb.RawGetResponse{NotFound: true}, nil
-		}
 		log.Printf("Error while GetCF, %v ", err)
 		return nil, err
+	}
+
+	if value == nil {
+		return &kvrpcpb.RawGetResponse{
+			NotFound: true,
+		}, nil
 	}
 
 	return &kvrpcpb.RawGetResponse{
