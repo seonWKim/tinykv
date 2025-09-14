@@ -1,6 +1,7 @@
 package standalone_storage
 
 import (
+	"errors"
 	"log"
 
 	"github.com/Connor1996/badger"
@@ -81,7 +82,16 @@ type StandAloneStorageReader struct {
 }
 
 func (sasr StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error) {
-	return engine_util.GetCF(sasr.inner.db, cf, key)
+	val, err := engine_util.GetCF(sasr.inner.db, cf, key)
+	if errors.Is(err, badger.ErrKeyNotFound) {
+		return nil, storage.ErrNotFound
+	}
+
+	if val == nil {
+		return nil, storage.ErrNotFound
+	}
+
+	return val, nil
 }
 
 func (sasr StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
