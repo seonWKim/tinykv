@@ -60,8 +60,6 @@ func (s *StandAloneStorage) Reader(ctx *kvrpcpb.Context) (storage.StorageReader,
 }
 
 func (s *StandAloneStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) error {
-	// Your Code Here (1).
-
 	writeBatch := engine_util.WriteBatch{}
 	for i := 0; i < len(batch); i++ {
 		b := batch[i]
@@ -70,8 +68,8 @@ func (s *StandAloneStorage) Write(ctx *kvrpcpb.Context, batch []storage.Modify) 
 
 	err := writeBatch.WriteToDB(s.db)
 	if err != nil {
-		log.Fatal("Failed to Write: ", err)
-		return nil
+		log.Printf("Error writing to DB, %v", err)
+		return err
 	}
 
 	return nil
@@ -87,9 +85,9 @@ func (sasr StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error)
 		return nil, storage.ErrNotFound
 	}
 
-	if val == nil {
-		return nil, storage.ErrNotFound
-	}
+	// if val == nil {
+	//	return nil, storage.ErrNotFound
+	// }
 
 	return val, nil
 }
