@@ -229,7 +229,7 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 
 // becomeCandidate transform this peer's state to candidate
 func (r *Raft) becomeCandidate() {
-	// Your Code Here (2A).
+	r.State = StateCandidate
 }
 
 // becomeLeader transform this peer's state to leader
@@ -267,7 +267,16 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 }
 
 func (r *Raft) handleCandidateMessage(m pb.Message) error {
-	// TODO
+	switch m.MsgType {
+	case pb.MessageType_MsgAppend:
+		if r.Term > m.Term {
+			log.Debug("Candidate's term(%v) is higher than the leader's term(%v)", r.Term, m.Term)
+		} else {
+			r.Term = m.Term
+			// TODO: Check whether downgrading to follwoer is appropriate for this case?
+			r.State = StateFollower
+		}
+	}
 	return nil
 }
 
