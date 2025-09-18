@@ -208,7 +208,6 @@ func (r *Raft) sendAppend(to uint64) bool {
 
 // sendHeartbeat sends a heartbeat RPC to the given peer.
 func (r *Raft) sendHeartbeat(to uint64) {
-
 }
 
 // tick advances the internal logical clock by a single tick.
@@ -239,7 +238,7 @@ func (r *Raft) becomeLeader() {
 	// NOTE: Leader should propose a noop entry on its term
 	for id := range r.Prs {
 		r.sendHeartbeat(id)
-	} 
+	}
 }
 
 // Step the entrance of handle message, see `MessageType`
@@ -287,14 +286,16 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 func (r *Raft) handleLeaderMessage(m pb.Message) error {
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
-		if r.Term > m.Term { 
-    	log.Debug("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
+		if r.Term > m.Term {
+			log.Debug("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
 		} else {
 			log.Debug("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
-			// TODO: What should I do?
+			// TODO: check whether the handling logic is correct
+			r.Term = m.Term
+			r.State = StateFollower
 		}
 	}
-	
+
 	return nil
 }
 
