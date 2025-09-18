@@ -180,10 +180,10 @@ func newRaft(c *Config) *Raft {
 			pendingSnapshot: nil,
 		},
 
-		Prs:   map[uint64]*Progress {},
+		Prs:   make(map[uint64]*Progress),
 		State: StateFollower, // TODO: Double check whether starting as a follower is correct
-		votes: map[uint64]bool {},
-		msgs:  []pb.Message {},
+		votes: make(map[uint64]bool),
+		msgs:  make([]pb.Message, 0),
 
 		Lead: 0, // TODO: Check whether 0 is used as invalid id
 
