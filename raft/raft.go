@@ -17,6 +17,7 @@ package raft
 import (
 	"errors"
 
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -217,7 +218,13 @@ func (r *Raft) tick() {
 
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
-	// Your Code Here (2A).
+	if (r.Term > term) {
+		log.Debug("Follower's term(%v) is higher than the leader's(%v)", r.Term, term)
+		return 
+	}
+
+  r.Term = term 
+	r.Lead = lead
 }
 
 // becomeCandidate transform this peer's state to candidate
@@ -240,6 +247,21 @@ func (r *Raft) Step(m pb.Message) error {
 	case StateCandidate:
 	case StateLeader:
 	}
+	return nil
+}
+
+func (r *Raft) handleFollowerMessage(m pb.Message) error { 
+	// TODO
+	return nil
+}
+
+func (r *Raft) handleCandidateMessage(m pb.Message) error { 
+  // TODO
+	return nil
+}
+
+func (r *Raft) handleLeaderMessage(m pb.Message) error { 
+  // TODO
 	return nil
 }
 
