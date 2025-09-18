@@ -177,7 +177,7 @@ func newRaft(c *Config) *Raft {
 			applied:   c.Applied,
 			stabled:   c.Applied,
 
-			entries:         []pb.Entry {},
+			entries:         []pb.Entry{},
 			pendingSnapshot: nil,
 		},
 
@@ -218,12 +218,12 @@ func (r *Raft) tick() {
 
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
-	if (r.Term > term) {
+	if r.Term > term {
 		log.Debug("Follower's term(%v) is higher than the leader's(%v)", r.Term, term)
-		return 
+		return
 	}
 
-  r.Term = term 
+	r.Term = term
 	r.Lead = lead
 }
 
@@ -244,24 +244,27 @@ func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A).
 	switch r.State {
 	case StateFollower:
+		r.handleFollowerMessage(m)
 	case StateCandidate:
+		r.handleCandidateMessage(m)
 	case StateLeader:
+		r.handleLeaderMessage(m)
 	}
 	return nil
 }
 
-func (r *Raft) handleFollowerMessage(m pb.Message) error { 
+func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	// TODO
 	return nil
 }
 
-func (r *Raft) handleCandidateMessage(m pb.Message) error { 
-  // TODO
+func (r *Raft) handleCandidateMessage(m pb.Message) error {
+	// TODO
 	return nil
 }
 
-func (r *Raft) handleLeaderMessage(m pb.Message) error { 
-  // TODO
+func (r *Raft) handleLeaderMessage(m pb.Message) error {
+	// TODO
 	return nil
 }
 
