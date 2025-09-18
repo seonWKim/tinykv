@@ -254,7 +254,15 @@ func (r *Raft) Step(m pb.Message) error {
 }
 
 func (r *Raft) handleFollowerMessage(m pb.Message) error {
-	// TODO
+	switch m.MsgType {
+	case pb.MessageType_MsgAppend:
+		if r.Term > m.Term {
+			log.Debug("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
+		} else {
+			r.Term = m.Term
+		}
+	}
+
 	return nil
 }
 
