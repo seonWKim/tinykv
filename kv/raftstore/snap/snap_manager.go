@@ -1,5 +1,6 @@
 package snap
 
+
 import (
 	"io/ioutil"
 	"math"

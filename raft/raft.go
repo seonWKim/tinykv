@@ -165,7 +165,37 @@ func newRaft(c *Config) *Raft {
 		panic(err.Error())
 	}
 	// Your Code Here (2A).
-	return nil
+	return &Raft{
+		id: c.ID,
+
+		Term: 0, // TODO: Should set appropriate term
+		RaftLog: &RaftLog{
+			storage: c.Storage,
+
+			committed: c.Applied, // TODO: Double check whether this is true
+			applied:   c.Applied,
+			stabled:   c.Applied,
+
+			entries:         []pb.Entry {},
+			pendingSnapshot: nil,
+		},
+
+		Prs:   map[uint64]*Progress {},
+		State: StateFollower, // TODO: Double check whether starting as a follower is correct
+		votes: map[uint64]bool {},
+		msgs:  []pb.Message {},
+
+		Lead: 0, // TODO: Check whether 0 is used as invalid id
+
+		heartbeatTimeout: c.HeartbeatTick,
+		electionTimeout:  c.ElectionTick,
+		heartbeatElapsed: 0,
+		electionElapsed:  0,
+
+		leadTransferee: 0,
+
+		PendingConfIndex: 0,
+	}
 }
 
 // sendAppend sends an append RPC with new entries (if any) and the
