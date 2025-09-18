@@ -208,7 +208,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 
 // sendHeartbeat sends a heartbeat RPC to the given peer.
 func (r *Raft) sendHeartbeat(to uint64) {
-	// Your Code Here (2A).
+
 }
 
 // tick advances the internal logical clock by a single tick.
@@ -234,8 +234,12 @@ func (r *Raft) becomeCandidate() {
 
 // becomeLeader transform this peer's state to leader
 func (r *Raft) becomeLeader() {
-	// Your Code Here (2A).
+	r.State = StateLeader
+
 	// NOTE: Leader should propose a noop entry on its term
+	for id := range r.Prs {
+		r.sendHeartbeat(id)
+	} 
 }
 
 // Step the entrance of handle message, see `MessageType`
@@ -273,7 +277,7 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 			log.Debug("Candidate's term(%v) is higher than the leader's term(%v)", r.Term, m.Term)
 		} else {
 			r.Term = m.Term
-			// TODO: Check whether downgrading to follwoer is appropriate for this case?
+			// TODO: Check whether downgrading to follower is appropriate for this case?
 			r.State = StateFollower
 		}
 	}
@@ -281,7 +285,16 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 }
 
 func (r *Raft) handleLeaderMessage(m pb.Message) error {
-	// TODO
+	switch m.MsgType {
+	case pb.MessageType_MsgAppend:
+		if r.Term > m.Term { 
+    	log.Debug("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
+		} else {
+			log.Debug("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
+			// TODO: What should I do?
+		}
+	}
+	
 	return nil
 }
 
