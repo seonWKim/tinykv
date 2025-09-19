@@ -195,7 +195,7 @@ func newRaft(c *Config) *Raft {
 			pendingSnapshot: nil,
 		},
 
-		Prs:   make(map[uint64]*Progress),
+		Prs:   prs,
 		State: StateFollower, // TODO: Double check whether starting as a follower is correct
 		votes: make(map[uint64]bool),
 		msgs:  make([]pb.Message, 0),
@@ -222,6 +222,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 
 func (r *Raft) sendHeartbeatToAll() {
 	for id := range r.Prs {
+		log.Debug("id %v", id)
 		r.sendHeartbeat(id)
 	}
 }
@@ -267,6 +268,7 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 
 	r.Term = term
 	r.Lead = lead
+	r.State = StateFollower
 }
 
 // becomeCandidate transform this peer's state to candidate
