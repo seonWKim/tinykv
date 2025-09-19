@@ -335,19 +335,15 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 }
 
 func (r *Raft) handleCandidateMessage(m pb.Message) error {
+	if r.Term > m.Term {
+		log.Debug("Candidate's term(%v) is higher than the message's term(%v)", r.Term, m.Term)
+		return nil
+	}
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
-		if r.Term > m.Term {
-			log.Debug("Candidate's term(%v) is higher than the leader's term(%v)", r.Term, m.Term)
-		} else {
-			r.becomeFollower(m.Term, m.From)
-		}
+		r.becomeFollower(m.Term, m.From)
+		r.electionElapsed = 0
 	case pb.MessageType_MsgHeartbeat:
-		if r.Term > m.Term {
-			log.Debug("Rejecting heartbeat because the message has older term(%v) in compared to current candidate term(%v)", m.Term, r.Term)
-			return nil
-		}
-
 		r.becomeFollower(m.Term, m.From)
 		r.electionElapsed = 0
 	}
