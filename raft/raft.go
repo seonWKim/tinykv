@@ -288,26 +288,25 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	r.State = StateFollower
 }
 
-// becomeCandidate transform this peer's state to candidate
 func (r *Raft) becomeCandidate() {
 	r.State = StateCandidate
 
-	// TODO: I'm not sure whether we should increase the term here. Should we increase the term when handling message?
+	// When a follower begins an election, it first increments its current term
 	r.Term += 1
+	
+	// TODO: Maybe we can send RequestVote RPC request from here?
 }
 
 // becomeLeader transform this peer's state to leader
 func (r *Raft) becomeLeader() {
 	r.State = StateLeader
+	r.Lead = r.id
 
-	// NOTE: Leader should propose a noop entry on its term
+	// NOTE: This will cause the leader to append no-op entry to its log and then replicate it to its followers
 	r.Step(pb.Message{
-		MsgType: pb.MessageType_MsgBeat,
+		MsgType: pb.MessageType_MsgPropose,
+		Entries: []*pb.Entry{{}},
 	})
-	for id := range r.Prs {
-		// TODO: Is this the appropriate form of noop message?
-		r.sendHeartbeat(id)
-	}
 }
 
 // Step the entrance of handle message, see `MessageType`
