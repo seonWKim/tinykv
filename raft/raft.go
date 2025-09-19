@@ -165,7 +165,21 @@ func newRaft(c *Config) *Raft {
 	if err := c.validate(); err != nil {
 		panic(err.Error())
 	}
-	// Your Code Here (2A).
+
+	lastIndex, err := c.Storage.LastIndex()
+	if err != nil {
+		log.Error("Error retrieving the last index %v", err)
+		return nil
+	}
+	prs := make(map[uint64]*Progress)
+	// TODO: is it okay to set Match and Next to lastIndex? Will Raft automatically fix when the follower is not in this state?
+	for id := range c.peers {
+		prs[uint64(id)] = &Progress{
+			Match: lastIndex,
+			Next:  lastIndex,
+		}
+	}
+
 	return &Raft{
 		id: c.ID,
 
@@ -208,11 +222,21 @@ func (r *Raft) sendAppend(to uint64) bool {
 
 // sendHeartbeat sends a heartbeat RPC to the given peer.
 func (r *Raft) sendHeartbeat(to uint64) {
+	r.msgs = append(r.msgs, pb.Message{
+		MsgType: pb.MessageType_MsgHeartbeat,
+		To:      to,
+		From:    r.id,
+		Term:    r.Term,
+		Commit:  r.RaftLog.committed,
+	})
 }
 
 // tick advances the internal logical clock by a single tick.
 func (r *Raft) tick() {
 	// Your Code Here (2A).
+	// TODO: What happen when electionTimeout and heartbeatTimeout has elapsed?
+	r.electionElapsed += 1
+	r.heartbeatElapsed += 1
 }
 
 // becomeFollower transform this peer's state to Follower
@@ -237,6 +261,7 @@ func (r *Raft) becomeLeader() {
 
 	// NOTE: Leader should propose a noop entry on its term
 	for id := range r.Prs {
+		// TODO: Is this the appropriate form of noop message?
 		r.sendHeartbeat(id)
 	}
 }
@@ -293,6 +318,10 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 			// TODO: check whether the handling logic is correct
 			r.Term = m.Term
 			r.State = StateFollower
+		}
+	case pb.MessageType_MsgPropose:
+		for id := range r.Prs {
+			r.sendHeartbeat(id)
 		}
 	}
 
