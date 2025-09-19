@@ -379,10 +379,17 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 			r.becomeFollower(m.Term, m.From)
 		}
 	case pb.MessageType_MsgPropose:
-		// TODO: When should we send the newly appended messages?
-		for _, entry := range m.Entries {
+		lastIndex := r.RaftLog.LastIndex()
+		for i, entry := range m.Entries {
+			entry.Term = r.Term
+			entry.Index = lastIndex + 1 + uint64(i)
 			r.RaftLog.entries = append(r.RaftLog.entries, *entry)
 		}
+
+		r.Prs[r.id].Match = r.RaftLog.LastIndex()
+		r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
+			 
+		// TODO: broadcast entries to followers
 	case pb.MessageType_MsgBeat:
 		r.sendHeartbeatToAll()
 	}
