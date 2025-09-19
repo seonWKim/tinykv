@@ -212,7 +212,7 @@ func newRaft(c *Config) *Raft {
 		votes: make(map[uint64]bool),
 		msgs:  make([]pb.Message, 0),
 
-		Lead: 0,
+		Lead: None,
 
 		heartbeatTimeout: c.HeartbeatTick,
 		electionTimeout:  c.ElectionTick,
