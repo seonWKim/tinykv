@@ -175,7 +175,7 @@ func newRaft(c *Config) *Raft {
 	// TODO: is it okay to set Match and Next to lastIndex? Will Raft automatically fix when the follower is not in this state?
 	for id := range c.peers {
 		prs[uint64(id)] = &Progress{
-			Match: lastIndex,
+			Match: 0,
 			Next:  lastIndex,
 		}
 	}
@@ -220,6 +220,12 @@ func (r *Raft) sendAppend(to uint64) bool {
 	return false
 }
 
+func (r *Raft) sendHeartbeatToAll() {
+	for id := range r.Prs {
+		r.sendHeartbeat(id)
+	}
+}
+
 // sendHeartbeat sends a heartbeat RPC to the given peer.
 func (r *Raft) sendHeartbeat(to uint64) {
 	r.msgs = append(r.msgs, pb.Message{
@@ -233,10 +239,23 @@ func (r *Raft) sendHeartbeat(to uint64) {
 
 // tick advances the internal logical clock by a single tick.
 func (r *Raft) tick() {
-	// Your Code Here (2A).
-	// TODO: What happen when electionTimeout and heartbeatTimeout has elapsed?
-	r.electionElapsed += 1
-	r.heartbeatElapsed += 1
+	switch r.State {
+	case StateLeader:
+		r.heartbeatElapsed += 1
+		if r.heartbeatElapsed >= r.heartbeatTimeout {
+			r.heartbeatElapsed = 0
+			r.Step(pb.Message{
+				MsgType: pb.MessageType_MsgBeat,
+			})
+		}
+	case StateCandidate, StateFollower:
+		r.electionTimeout += 1
+		if r.electionElapsed >= r.electionTimeout {
+			r.Step(pb.Message{
+				MsgType: pb.MessageType_MsgHup,
+			})
+		}
+	}
 }
 
 // becomeFollower transform this peer's state to Follower
@@ -289,6 +308,26 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 		} else {
 			r.Term = m.Term
 		}
+	case pb.MessageType_MsgHeartbeat:
+		if m.Term < r.Term {
+			log.Debug("Rejecting heartbeat because the mesasge has older term(%v) in compared to current follower term(%v)", m.Term, r.Term)
+			return nil
+		}
+
+		r.Lead = m.From
+		r.Term = m.Term
+
+		// Btw,
+		r.electionElapsed = 0
+
+		r.Step(pb.Message{
+			MsgType: pb.MessageType_MsgHeartbeatResponse,
+
+			To:   m.From,
+			From: r.id,
+
+			Term: r.Term,
+		})
 	}
 
 	return nil
@@ -320,9 +359,13 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 			r.State = StateFollower
 		}
 	case pb.MessageType_MsgPropose:
-		for id := range r.Prs {
-			r.sendHeartbeat(id)
+		// TODO: When should we send the newly appended messages?
+		for _, entry := range m.Entries {
+			r.RaftLog.entries = append(r.RaftLog.entries, *entry)
 		}
+	// 'MessageType_MsgBeat' is a local message that signals the leader to send a heartbeat
+	case pb.MessageType_MsgBeat:
+		r.sendHeartbeatToAll()
 	}
 
 	return nil
