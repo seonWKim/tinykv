@@ -293,7 +293,7 @@ func (r *Raft) becomeCandidate() {
 
 	// When a follower begins an election, it first increments its current term
 	r.Term += 1
-	
+
 	// TODO: Maybe we can send RequestVote RPC request from here?
 }
 
@@ -325,20 +325,15 @@ func (r *Raft) Step(m pb.Message) error {
 }
 
 func (r *Raft) handleFollowerMessage(m pb.Message) error {
+	if r.Term > m.Term {
+		log.Debugf("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
+		return nil
+	}
+
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
-		// TODO: maybe we can move the term checking logic to the top?
-		if r.Term > m.Term {
-			log.Debugf("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
-		} else {
-			r.Term = m.Term
-		}
+		r.Term = m.Term
 	case pb.MessageType_MsgHeartbeat:
-		if m.Term < r.Term {
-			log.Debugf("Rejecting heartbeat because the mesasge has older term(%v) in compared to current follower term(%v)", m.Term, r.Term)
-			return nil
-		}
-
 		r.Lead = m.From
 		r.Term = m.Term
 
