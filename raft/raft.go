@@ -303,6 +303,7 @@ func (r *Raft) Step(m pb.Message) error {
 func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
+		// TODO: maybe we can move the term checking logic to the top?
 		if r.Term > m.Term {
 			log.Debug("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
 		} else {
@@ -339,10 +340,16 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 		if r.Term > m.Term {
 			log.Debug("Candidate's term(%v) is higher than the leader's term(%v)", r.Term, m.Term)
 		} else {
-			r.Term = m.Term
-			// TODO: Check whether downgrading to follower is appropriate for this case?
-			r.State = StateFollower
+			r.becomeFollower(m.Term, m.From)
 		}
+	case pb.MessageType_MsgHeartbeat:
+		if r.Term > m.Term {
+			log.Debug("Rejecting heartbeat because the message has older term(%v) in compared to current candidate term(%v)", m.Term, r.Term)
+			return nil
+		}
+
+		r.becomeFollower(m.Term, m.From)
+		r.electionElapsed = 0
 	}
 	return nil
 }
@@ -354,9 +361,7 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 			log.Debug("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
 		} else {
 			log.Debug("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
-			// TODO: check whether the handling logic is correct
-			r.Term = m.Term
-			r.State = StateFollower
+			r.becomeFollower(m.Term, m.From)
 		}
 	case pb.MessageType_MsgPropose:
 		// TODO: When should we send the newly appended messages?
