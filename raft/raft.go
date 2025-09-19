@@ -175,25 +175,31 @@ func newRaft(c *Config) *Raft {
 	// TODO: is it okay to set Match and Next to lastIndex? Will Raft automatically fix when the follower is not in this state?
 	for _, id := range c.peers {
 		prs[uint64(id)] = &Progress{
-			// Match represents the index of the highest log entry known to be replicated on a follower. 
+			// Match represents the index of the highest log entry known to be replicated on a follower.
 			// Initializing it to 0 is corerct because, at the start, the leader has not confirmed any log replication with its followers
 			Match: 0,
 
-			// Index of the next entry the leader will send to a follower. 
+			// Index of the next entry the leader will send to a follower.
 			// It should be initialized to the leader's last log entry + 1
-			// Even if the Next is not the correct value, Raft can auto correct it 
-			Next:  lastIndex,
+			// Even if the Next is not the correct value, Raft can auto correct it
+			Next: lastIndex,
 		}
+	}
+
+	initialState, _, err := c.Storage.InitialState()
+	if err != nil {
+		log.Errorf("Error retrieving initial state: %v", err)
+		return nil
 	}
 
 	return &Raft{
 		id: c.ID,
 
-		Term: 0, // TODO: Should set appropriate term
+		Term: initialState.Term,
 		RaftLog: &RaftLog{
 			storage: c.Storage,
 
-			committed: c.Applied, // TODO: Double check whether this is true
+			committed: initialState.Commit,
 			applied:   c.Applied,
 			stabled:   c.Applied,
 
@@ -202,11 +208,11 @@ func newRaft(c *Config) *Raft {
 		},
 
 		Prs:   prs,
-		State: StateFollower, // TODO: Double check whether starting as a follower is correct
+		State: StateFollower,
 		votes: make(map[uint64]bool),
 		msgs:  make([]pb.Message, 0),
 
-		Lead: 0, // TODO: Check whether 0 is used as invalid id
+		Lead: 0,
 
 		heartbeatTimeout: c.HeartbeatTick,
 		electionTimeout:  c.ElectionTick,
@@ -295,7 +301,7 @@ func (r *Raft) becomeLeader() {
 	r.State = StateLeader
 
 	// NOTE: Leader should propose a noop entry on its term
-	r.Step(pb.Message { 
+	r.Step(pb.Message{
 		MsgType: pb.MessageType_MsgBeat,
 	})
 	for id := range r.Prs {
