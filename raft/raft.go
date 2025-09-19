@@ -172,7 +172,6 @@ func newRaft(c *Config) *Raft {
 		return nil
 	}
 	prs := make(map[uint64]*Progress)
-	// TODO: is it okay to set Match and Next to lastIndex? Will Raft automatically fix when the follower is not in this state?
 	for _, id := range c.peers {
 		prs[uint64(id)] = &Progress{
 			// Match represents the index of the highest log entry known to be replicated on a follower.
