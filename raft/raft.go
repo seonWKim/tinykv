@@ -222,7 +222,13 @@ func (r *Raft) sendAppend(to uint64) bool {
 
 func (r *Raft) sendHeartbeatToAll() {
 	for id := range r.Prs {
-		log.Debug("id %v", id)
+		log.Infof("id: %v", id)
+		if r.id == id {
+			// Because Prs contains information for all nodes, let's skip the leader's id
+			return
+		}
+		log.Infof("used id: %v", id)
+
 		r.sendHeartbeat(id)
 	}
 }
@@ -262,7 +268,7 @@ func (r *Raft) tick() {
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	if r.Term > term {
-		log.Debug("Follower's term(%v) is higher than the leader's(%v)", r.Term, term)
+		log.Debugf("Follower's term(%v) is higher than the leader's(%v)", r.Term, term)
 		return
 	}
 
@@ -307,13 +313,13 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	case pb.MessageType_MsgAppend:
 		// TODO: maybe we can move the term checking logic to the top?
 		if r.Term > m.Term {
-			log.Debug("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
+			log.Debugf("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
 		} else {
 			r.Term = m.Term
 		}
 	case pb.MessageType_MsgHeartbeat:
 		if m.Term < r.Term {
-			log.Debug("Rejecting heartbeat because the mesasge has older term(%v) in compared to current follower term(%v)", m.Term, r.Term)
+			log.Debugf("Rejecting heartbeat because the mesasge has older term(%v) in compared to current follower term(%v)", m.Term, r.Term)
 			return nil
 		}
 
@@ -338,7 +344,7 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 
 func (r *Raft) handleCandidateMessage(m pb.Message) error {
 	if r.Term > m.Term {
-		log.Debug("Candidate's term(%v) is higher than the message's term(%v)", r.Term, m.Term)
+		log.Debugf("Candidate's term(%v) is higher than the message's term(%v)", r.Term, m.Term)
 		return nil
 	}
 	switch m.MsgType {
@@ -356,9 +362,9 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
 		if r.Term > m.Term {
-			log.Debug("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
+			log.Debugf("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
 		} else {
-			log.Debug("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
+			log.Debugf("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
 			r.becomeFollower(m.Term, m.From)
 		}
 	case pb.MessageType_MsgPropose:
