@@ -173,7 +173,7 @@ func newRaft(c *Config) *Raft {
 	}
 	prs := make(map[uint64]*Progress)
 	// TODO: is it okay to set Match and Next to lastIndex? Will Raft automatically fix when the follower is not in this state?
-	for id := range c.peers {
+	for _, id := range c.peers {
 		prs[uint64(id)] = &Progress{
 			Match: 0,
 			Next:  lastIndex,
@@ -221,13 +221,13 @@ func (r *Raft) sendAppend(to uint64) bool {
 }
 
 func (r *Raft) sendHeartbeatToAll() {
+	// Let's reset heartbeatElapsed right before sending heartbeat
+	r.heartbeatElapsed = 0
 	for id := range r.Prs {
-		log.Infof("id: %v", id)
 		if r.id == id {
 			// Because Prs contains information for all nodes, let's skip the leader's id
-			return
+			continue
 		}
-		log.Infof("used id: %v", id)
 
 		r.sendHeartbeat(id)
 	}
@@ -250,7 +250,6 @@ func (r *Raft) tick() {
 	case StateLeader:
 		r.heartbeatElapsed += 1
 		if r.heartbeatElapsed >= r.heartbeatTimeout {
-			r.heartbeatElapsed = 0
 			r.Step(pb.Message{
 				MsgType: pb.MessageType_MsgBeat,
 			})
@@ -280,6 +279,9 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 // becomeCandidate transform this peer's state to candidate
 func (r *Raft) becomeCandidate() {
 	r.State = StateCandidate
+
+	// TODO: I'm not sure whether we should increase the term here. Should we increase the term when handling message?
+	r.Term += 1
 }
 
 // becomeLeader transform this peer's state to leader
@@ -287,6 +289,9 @@ func (r *Raft) becomeLeader() {
 	r.State = StateLeader
 
 	// NOTE: Leader should propose a noop entry on its term
+	r.Step(pb.Message { 
+		MsgType: pb.MessageType_MsgBeat,
+	})
 	for id := range r.Prs {
 		// TODO: Is this the appropriate form of noop message?
 		r.sendHeartbeat(id)
@@ -372,7 +377,6 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 		for _, entry := range m.Entries {
 			r.RaftLog.entries = append(r.RaftLog.entries, *entry)
 		}
-	// 'MessageType_MsgBeat' is a local message that signals the leader to send a heartbeat
 	case pb.MessageType_MsgBeat:
 		r.sendHeartbeatToAll()
 	}
