@@ -265,7 +265,6 @@ func (r *Raft) tick() {
 				Term:    r.Term,
 			})
 
-			// TODO: should we reset heartbeatElapsed before or after r.Step(...)
 			r.heartbeatElapsed = 0
 		}
 
@@ -280,7 +279,6 @@ func (r *Raft) tick() {
 				Term:    r.Term,
 			})
 
-			// TODO: should we reset electionElapsed before of after r.Step(...)
 			r.electionElapsed = 0
 		}
 	}
@@ -353,16 +351,16 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 		return nil
 	}
 
-	// TODO: I'm not sure whether it's okay to reset electionElapsed here. Because there might messages from self or non-leader
+	// If the follower receives message from current leader, reset electionElapsed
+	if m.From == r.Lead {
+		r.electionElapsed = 0
+	}
 
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
-		r.electionElapsed = 0
 		r.Term = m.Term
 
 	case pb.MessageType_MsgHeartbeat:
-		r.electionElapsed = 0
-
 		r.Lead = m.From
 		r.Term = m.Term
 
@@ -374,7 +372,7 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 		})
 
 	case pb.MessageType_MsgHup:
-		r.electionElapsed = 0
+		// Don't have to reset electionElapsed because tick() will reset it
 		r.becomeCandidate()
 		r.sendRequestVoteToAll()
 	}
@@ -400,7 +398,7 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 		r.becomeFollower(m.Term, m.From)
 
 	case pb.MessageType_MsgHup:
-		r.electionElapsed = 0
+		// Don't have to reset electionElapsed because tick() will reset it
 		r.becomeCandidate()
 		r.sendRequestVoteToAll()
 	}
