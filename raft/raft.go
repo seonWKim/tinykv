@@ -359,15 +359,13 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 		} else if m.Term == r.Term && r.Vote != None {
 			reject = false
 		} else if m.LogTerm < r.RaftLog.LastTerm() {
-			reject =false 
+			// TODO: reject =false 
 		} else if m.LogTerm == r.RaftLog.LastTerm() && m.Index < r.RaftLog.LastIndex() {
-      reject = false 
-		} else {
-			//
+			// TODO: reject = false 
 		}
 
 		r.msgs = append(r.msgs, pb.Message { 
-    	MsgType: pb.MessageType_MsgHeartbeatResponse,
+    	MsgType: pb.MessageType_MsgRequestVoteResponse,
 			To: m.From,
 			From: r.id,
       Reject: reject,
