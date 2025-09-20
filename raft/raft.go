@@ -386,8 +386,6 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 		return nil
 	}
 
-	// TODO: I'm not sure whether it's okay to reset electionElapsed here. Because there might messages from self or non-leader
-
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
 		r.electionElapsed = 0
