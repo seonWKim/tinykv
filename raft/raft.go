@@ -396,6 +396,10 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 }
 
 func (r *Raft) handleHeartbeatMessage(m pb.Message) {
+	if m.MsgType != pb.MessageType_MsgHeartbeat {
+		log.Fatal("Not heartbeat message")
+	}
+
 	r.Step(pb.Message{
 		MsgType: pb.MessageType_MsgHeartbeatResponse,
 		To:      m.From,
