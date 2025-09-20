@@ -345,13 +345,39 @@ func (r *Raft) Step(m pb.Message) error {
 	return nil
 }
 
+// TODO: should we reset electionElapsed for every messages or just heartbeat message?
 func (r *Raft) handleFollowerMessage(m pb.Message) error {
-	if r.Term > m.Term {
-		log.Debugf("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
-		return nil
+	switch m.MsgType {
+		case pb.MessageType_MsgRequestVote:
+
+    // 1. if the candidate's term < follower's term, reject
+		// 2. if the follower has already voted in the same term, reject 
+		// 3. if the candidate's lastLogTerm < follower's lastLogTerm OR (term is same AND candidate's lastLogIndex < follower's lastLogIndex) 
+		reject := true
+		if m.Term < r.Term {
+			reject = false 
+		} else if m.Term == r.Term && r.Vote != None {
+			reject = false
+		} else if m.LogTerm < r.RaftLog.LastTerm() {
+			reject =false 
+		} else if m.LogTerm == r.RaftLog.LastTerm() && m.Index < r.RaftLog.LastIndex() {
+      reject = false 
+		} else {
+			//
+		}
+
+		r.msgs = append(r.msgs, pb.Message { 
+    	MsgType: pb.MessageType_MsgHeartbeatResponse,
+			To: m.From,
+			From: r.id,
+      Reject: reject,
+		})
 	}
 
-	// If the follower receives message from current leader, reset electionElapsed
+	if r.Term > m.Term { 
+  	return nil
+	}
+	
 	if m.From == r.Lead {
 		r.electionElapsed = 0
 	}
