@@ -262,20 +262,25 @@ func (r *Raft) tick() {
 		if r.heartbeatElapsed >= r.heartbeatTimeout {
 			r.Step(pb.Message{
 				MsgType: pb.MessageType_MsgBeat,
-				Term: r.Term,
+				Term:    r.Term,
 			})
 
+			// TODO: should we reset heartbeatElapsed before or after r.Step(...)
 			r.heartbeatElapsed = 0
 		}
 
 	case StateCandidate, StateFollower:
 		r.electionElapsed += 1
 		if r.electionElapsed >= r.electionTimeout {
+			// initialize state for vote
+			r.votes = make(map[uint64]bool)
+
 			r.Step(pb.Message{
 				MsgType: pb.MessageType_MsgHup,
-				Term: r.Term,
+				Term:    r.Term,
 			})
 
+			// TODO: should we reset electionElapsed before of after r.Step(...)
 			r.electionElapsed = 0
 		}
 	}
@@ -294,24 +299,24 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 }
 
 func (r *Raft) becomeCandidate() {
-	r.State = StateCandidate
-
-	// When a follower begins an election, it first increments its current term
 	r.Term += 1
-
 	r.votes[r.id] = true
+	r.State = StateCandidate
+}
+
+func (r *Raft) sendRequestVoteToAll() {
 	for id := range r.Prs {
 		if r.id == id {
 			continue
 		}
 
 		r.msgs = append(r.msgs, pb.Message{
-			MsgType: pb.MessageType_MsgRequestVote,
-			To:      id,
-			From:    r.id,
-			Term:    r.Term,
-			Commit:  r.RaftLog.committed,
-		})
+				MsgType: pb.MessageType_MsgRequestVote,
+				To: id,
+				From: r.id,
+				Term: r.Term,
+				Commit: r.RaftLog.committed,
+			})
 	}
 }
 
@@ -347,7 +352,7 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 		log.Debugf("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
 		return nil
 	}
-	
+
 	// TODO: I'm not sure whether it's okay to reset electionElapsed here. Because there might messages from self or non-leader
 
 	switch m.MsgType {
@@ -371,6 +376,7 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	case pb.MessageType_MsgHup:
 		r.electionElapsed = 0
 		r.becomeCandidate()
+		r.sendRequestVoteToAll()
 	}
 
 	return nil
@@ -396,6 +402,7 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 	case pb.MessageType_MsgHup:
 		r.electionElapsed = 0
 		r.becomeCandidate()
+		r.sendRequestVoteToAll()
 	}
 
 	return nil
