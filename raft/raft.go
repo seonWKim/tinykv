@@ -299,20 +299,26 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 func (r *Raft) becomeCandidate() {
 	r.Term += 1
 	r.votes[r.id] = true
-	r.State = StateCandidate
+	// TODO: check whether placing this logic here is appropriate
+	if len(r.Prs) <= 1 {
+		r.becomeLeader()
+	} else {
+		r.State = StateCandidate
+	}
 }
 
 func (r *Raft) sendRequestVoteToAll() {
 	for id := range r.Prs {
 		if r.id == id {
-		} else {
-			r.msgs = append(r.msgs, pb.Message{
-				MsgType: pb.MessageType_MsgRequestVote,
-				To:      id,
-				From:    r.id,
-				Term:    r.Term,
-			})
+			continue
 		}
+
+		r.msgs = append(r.msgs, pb.Message{
+			MsgType: pb.MessageType_MsgRequestVote,
+			To:      id,
+			From:    r.id,
+			Term:    r.Term,
+		})
 	}
 }
 
@@ -424,17 +430,9 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 		r.sendRequestVoteToAll()
 
 	case pb.MessageType_MsgRequestVoteResponse:
-		r.votes[m.From] = true
-		totalPeersCount := len(r.Prs)
-		count := 0
-		for _, v := range r.votes {
-			if v {
-				count++
-			}
-			if count > totalPeersCount/2+1 {
-				r.becomeLeader()
-				break
-			}
+		r.votes[m.From] = !m.Reject
+		if !m.Reject {
+			r.checkAndBecomeLeader()
 		}
 	}
 
@@ -468,6 +466,21 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 	}
 
 	return nil
+}
+
+func (r *Raft) checkAndBecomeLeader() {
+	count := 0
+	totalNodesCount := len(r.Prs)
+	for _, v := range r.votes {
+		if v {
+			count++
+		}
+
+		if count > totalNodesCount/2 {
+			r.becomeLeader()
+			break
+		}
+	}
 }
 
 // handleAppendEntries handle AppendEntries RPC request
