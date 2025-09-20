@@ -360,7 +360,7 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	case pb.MessageType_MsgRequestVote:
 		// TODO: fix this later
 		isLogUpToDate := true
-		canVote := r.Vote != None || r.Vote == m.From
+		canVote := r.Vote == None || r.Vote == m.From
 		reject := m.Term < r.Term || !canVote || !isLogUpToDate
 
 		if !reject {
