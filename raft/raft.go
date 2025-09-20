@@ -233,7 +233,6 @@ func (r *Raft) sendAppend(to uint64) bool {
 
 func (r *Raft) sendHeartbeatToAll() {
 	// Let's reset heartbeatElapsed right before sending heartbeat
-	r.heartbeatElapsed = 0
 	for id := range r.Prs {
 		if r.id == id {
 			// Because Prs contains information for all nodes, let's skip the leader's id
@@ -263,14 +262,21 @@ func (r *Raft) tick() {
 		if r.heartbeatElapsed >= r.heartbeatTimeout {
 			r.Step(pb.Message{
 				MsgType: pb.MessageType_MsgBeat,
+				Term: r.Term,
 			})
+
+			r.heartbeatElapsed = 0
 		}
+
 	case StateCandidate, StateFollower:
-		r.electionTimeout += 1
+		r.electionElapsed += 1
 		if r.electionElapsed >= r.electionTimeout {
 			r.Step(pb.Message{
 				MsgType: pb.MessageType_MsgHup,
+				Term: r.Term,
 			})
+
+			r.electionElapsed = 0
 		}
 	}
 }
@@ -293,7 +299,20 @@ func (r *Raft) becomeCandidate() {
 	// When a follower begins an election, it first increments its current term
 	r.Term += 1
 
-	// TODO: Maybe we can send RequestVote RPC request from here?
+	r.votes[r.id] = true
+	for id := range r.Prs {
+		if r.id == id {
+			continue
+		}
+
+		r.msgs = append(r.msgs, pb.Message{
+			MsgType: pb.MessageType_MsgRequestVote,
+			To:      id,
+			From:    r.id,
+			Term:    r.Term,
+			Commit:  r.RaftLog.committed,
+		})
+	}
 }
 
 // becomeLeader transform this peer's state to leader
@@ -328,25 +347,30 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 		log.Debugf("Follower's term(%v) is greater than the leader's term(%v)", r.Term, m.Term)
 		return nil
 	}
+	
+	// TODO: I'm not sure whether it's okay to reset electionElapsed here. Because there might messages from self or non-leader
 
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
+		r.electionElapsed = 0
 		r.Term = m.Term
+
 	case pb.MessageType_MsgHeartbeat:
+		r.electionElapsed = 0
+
 		r.Lead = m.From
 		r.Term = m.Term
 
-		// Btw,
-		r.electionElapsed = 0
-
 		r.Step(pb.Message{
 			MsgType: pb.MessageType_MsgHeartbeatResponse,
-
-			To:   m.From,
-			From: r.id,
-
-			Term: r.Term,
+			To:      m.From,
+			From:    r.id,
+			Term:    r.Term,
 		})
+
+	case pb.MessageType_MsgHup:
+		r.electionElapsed = 0
+		r.becomeCandidate()
 	}
 
 	return nil
@@ -357,14 +381,23 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 		log.Debugf("Candidate's term(%v) is higher than the message's term(%v)", r.Term, m.Term)
 		return nil
 	}
+
+	// TODO: I'm not sure whether it's okay to reset electionElapsed here. Because there might messages from self or non-leader
+
 	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
-		r.becomeFollower(m.Term, m.From)
 		r.electionElapsed = 0
+		r.becomeFollower(m.Term, m.From)
+
 	case pb.MessageType_MsgHeartbeat:
-		r.becomeFollower(m.Term, m.From)
 		r.electionElapsed = 0
+		r.becomeFollower(m.Term, m.From)
+
+	case pb.MessageType_MsgHup:
+		r.electionElapsed = 0
+		r.becomeCandidate()
 	}
+
 	return nil
 }
 
@@ -377,6 +410,7 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 			log.Debugf("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
 			r.becomeFollower(m.Term, m.From)
 		}
+
 	case pb.MessageType_MsgPropose:
 		lastIndex := r.RaftLog.LastIndex()
 		for i, entry := range m.Entries {
@@ -387,7 +421,7 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 
 		r.Prs[r.id].Match = r.RaftLog.LastIndex()
 		r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
-			 
+
 		// TODO: broadcast entries to followers
 	case pb.MessageType_MsgBeat:
 		r.sendHeartbeatToAll()
