@@ -351,54 +351,40 @@ func (r *Raft) Step(m pb.Message) error {
 
 // TODO: should we reset electionElapsed for every messages or just heartbeat message?
 func (r *Raft) handleFollowerMessage(m pb.Message) error {
+	if m.Term > r.Term {
+		// The message might be from the candidate. So the lead should be None
+		r.becomeFollower(m.Term, None)
+	}
+
 	switch m.MsgType {
 	case pb.MessageType_MsgRequestVote:
+		// TODO: fix this later
+		isLogUpToDate := true
+		canVote := r.Vote != None || r.Vote == m.From
+		reject := m.Term < r.Term || !canVote || !isLogUpToDate
 
-		// 1. if the candidate's term < follower's term, reject
-		// 2. if the follower has already voted in the same term, reject
-		// 3. if the candidate's lastLogTerm < follower's lastLogTerm OR (term is same AND candidate's lastLogIndex < follower's lastLogIndex)
-		reject := true
-		if m.Term < r.Term {
-			reject = false
-		} else if m.Term == r.Term && r.Vote != None {
-			reject = false
-		} else if m.LogTerm < r.RaftLog.LastTerm() {
-			// TODO: reject =false
-		} else if m.LogTerm == r.RaftLog.LastTerm() && m.Index < r.RaftLog.LastIndex() {
-			// TODO: reject = false
+		if !reject {
+			r.Vote = m.From
+			r.electionElapsed = 0
 		}
 
-		r.Vote = m.From
 		r.msgs = append(r.msgs, pb.Message{
 			MsgType: pb.MessageType_MsgRequestVoteResponse,
 			To:      m.From,
 			From:    r.id,
+			Term:    r.Term,
 			Reject:  reject,
 		})
-	}
-
-	if r.Term > m.Term {
-		return nil
-	}
-
-	if m.From == r.Lead {
-		r.electionElapsed = 0
-	}
-
-	switch m.MsgType {
 	case pb.MessageType_MsgAppend:
-		r.Term = m.Term
+		r.electionElapsed = 0
+		// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
+		r.Lead = m.From
 
 	case pb.MessageType_MsgHeartbeat:
+		r.electionElapsed = 0
+		// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
 		r.Lead = m.From
-		r.Term = m.Term
-
-		r.Step(pb.Message{
-			MsgType: pb.MessageType_MsgHeartbeatResponse,
-			To:      m.From,
-			From:    r.id,
-			Term:    r.Term,
-		})
+		r.handleHeartbeatMessage(m)
 
 	case pb.MessageType_MsgHup:
 		// Don't have to reset electionElapsed because tick() will reset it
@@ -407,6 +393,15 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	}
 
 	return nil
+}
+
+func (r *Raft) handleHeartbeatMessage(m pb.Message) {
+	r.Step(pb.Message{
+		MsgType: pb.MessageType_MsgHeartbeatResponse,
+		To:      m.From,
+		From:    r.id,
+		Term:    r.Term,
+	})
 }
 
 func (r *Raft) handleCandidateMessage(m pb.Message) error {
