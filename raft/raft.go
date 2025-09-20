@@ -305,16 +305,14 @@ func (r *Raft) becomeCandidate() {
 func (r *Raft) sendRequestVoteToAll() {
 	for id := range r.Prs {
 		if r.id == id {
-			continue
-		}
-
-		r.msgs = append(r.msgs, pb.Message{
+		} else {
+			r.msgs = append(r.msgs, pb.Message{
 				MsgType: pb.MessageType_MsgRequestVote,
-				To: id,
-				From: r.id,
-				Term: r.Term,
-				Commit: r.RaftLog.committed,
+				To:      id,
+				From:    r.id,
+				Term:    r.Term,
 			})
+		}
 	}
 }
 
@@ -348,34 +346,35 @@ func (r *Raft) Step(m pb.Message) error {
 // TODO: should we reset electionElapsed for every messages or just heartbeat message?
 func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	switch m.MsgType {
-		case pb.MessageType_MsgRequestVote:
+	case pb.MessageType_MsgRequestVote:
 
-    // 1. if the candidate's term < follower's term, reject
-		// 2. if the follower has already voted in the same term, reject 
-		// 3. if the candidate's lastLogTerm < follower's lastLogTerm OR (term is same AND candidate's lastLogIndex < follower's lastLogIndex) 
+		// 1. if the candidate's term < follower's term, reject
+		// 2. if the follower has already voted in the same term, reject
+		// 3. if the candidate's lastLogTerm < follower's lastLogTerm OR (term is same AND candidate's lastLogIndex < follower's lastLogIndex)
 		reject := true
 		if m.Term < r.Term {
-			reject = false 
+			reject = false
 		} else if m.Term == r.Term && r.Vote != None {
 			reject = false
 		} else if m.LogTerm < r.RaftLog.LastTerm() {
-			// TODO: reject =false 
+			// TODO: reject =false
 		} else if m.LogTerm == r.RaftLog.LastTerm() && m.Index < r.RaftLog.LastIndex() {
-			// TODO: reject = false 
+			// TODO: reject = false
 		}
 
-		r.msgs = append(r.msgs, pb.Message { 
-    	MsgType: pb.MessageType_MsgRequestVoteResponse,
-			To: m.From,
-			From: r.id,
-      Reject: reject,
+		r.Vote = m.From
+		r.msgs = append(r.msgs, pb.Message{
+			MsgType: pb.MessageType_MsgRequestVoteResponse,
+			To:      m.From,
+			From:    r.id,
+			Reject:  reject,
 		})
 	}
 
-	if r.Term > m.Term { 
-  	return nil
+	if r.Term > m.Term {
+		return nil
 	}
-	
+
 	if m.From == r.Lead {
 		r.electionElapsed = 0
 	}
@@ -423,6 +422,20 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 		// Don't have to reset electionElapsed because tick() will reset it
 		r.becomeCandidate()
 		r.sendRequestVoteToAll()
+
+	case pb.MessageType_MsgRequestVoteResponse:
+		r.votes[m.From] = true
+		totalPeersCount := len(r.Prs)
+		count := 0
+		for _, v := range r.votes {
+			if v {
+				count++
+			}
+			if count > totalPeersCount/2+1 {
+				r.becomeLeader()
+				break
+			}
+		}
 	}
 
 	return nil
