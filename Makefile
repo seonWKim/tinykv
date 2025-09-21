@@ -130,3 +130,14 @@ project4b:
 
 project4c:
 	$(GOTEST) ./kv/transaction/... -run 4C
+
+# Examples:
+#   make test-single TEST=TestLeaderCycle2AA
+#   make test-single TEST=TestFollowerVote2AA
+#   make test-single-debug TEST=TestLeaderCycle2AA
+test-single:
+	$(GOTEST) -v ./raft -run $(TEST)
+
+# Generic debug pattern rule - works for any target
+%-debug:
+	LOG_LEVEL=debug $(MAKE) $*
