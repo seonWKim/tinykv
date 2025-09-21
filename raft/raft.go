@@ -250,12 +250,17 @@ func (r *Raft) sendHeartbeatToAll() {
 
 // sendHeartbeat sends a heartbeat RPC to the given peer.
 func (r *Raft) sendHeartbeat(to uint64) {
+	var commit uint64
+	if r.RaftLog != nil { 
+		commit = r.RaftLog.committed
+	}
+	
 	r.msgs = append(r.msgs, pb.Message{
 		MsgType: pb.MessageType_MsgHeartbeat,
 		To:      to,
 		From:    r.id,
 		Term:    r.Term,
-		Commit:  r.RaftLog.committed,
+		Commit:  commit,
 	})
 }
 
