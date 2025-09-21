@@ -361,6 +361,93 @@ func (r *Raft) Step(m pb.Message) error {
 	return nil
 }
 
+// FollowerMessageHandler defines the interface for handling messages in follower state
+type FollowerMessageHandler interface {
+	Handle(r *Raft, m pb.Message) error
+}
+
+// FollowerRequestVoteHandler handles vote request messages for follower
+type FollowerRequestVoteHandler struct{}
+
+func (h *FollowerRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
+	// TODO: fix this later
+	isLogUpToDate := true
+	canVote := r.Vote == None || r.Vote == m.From
+	reject := m.Term < r.Term || !canVote || !isLogUpToDate
+
+	if !reject {
+		r.Vote = m.From
+		r.electionElapsed = 0
+	}
+	log.Debugf("Node(%v) received MsgRequestVote from Node(%v). Rejected: %v", r.id, m.From, reject)
+
+	r.msgs = append(r.msgs, pb.Message{
+		MsgType: pb.MessageType_MsgRequestVoteResponse,
+		To:      m.From,
+		From:    r.id,
+		Term:    r.Term,
+		Reject:  reject,
+	})
+	return nil
+}
+
+// FollowerAppendHandler handles append messages for follower
+type FollowerAppendHandler struct{}
+
+func (h *FollowerAppendHandler) Handle(r *Raft, m pb.Message) error {
+	r.electionElapsed = 0
+	// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
+	r.Lead = m.From
+	return nil
+}
+
+// FollowerHeartbeatHandler handles heartbeat messages for follower
+type FollowerHeartbeatHandler struct{}
+
+func (h *FollowerHeartbeatHandler) Handle(r *Raft, m pb.Message) error {
+	r.electionElapsed = 0
+	// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
+	r.Lead = m.From
+	r.handleHeartbeat(m)
+	return nil
+}
+
+// FollowerHupHandler handles hup (election timeout) messages for follower
+type FollowerHupHandler struct{}
+
+func (h *FollowerHupHandler) Handle(r *Raft, m pb.Message) error {
+	// Don't have to reset electionElapsed because tick() will reset it
+	r.becomeCandidate()
+	r.sendRequestVoteToAll()
+	return nil
+}
+
+// FollowerMessageProcessor manages follower message handling
+type FollowerMessageProcessor struct {
+	handlers map[pb.MessageType]FollowerMessageHandler
+}
+
+func NewFollowerMessageProcessor() *FollowerMessageProcessor {
+	return &FollowerMessageProcessor{
+		handlers: map[pb.MessageType]FollowerMessageHandler{
+			pb.MessageType_MsgRequestVote: &FollowerRequestVoteHandler{},
+			pb.MessageType_MsgAppend:      &FollowerAppendHandler{},
+			pb.MessageType_MsgHeartbeat:   &FollowerHeartbeatHandler{},
+			pb.MessageType_MsgHup:         &FollowerHupHandler{},
+		},
+	}
+}
+
+func (p *FollowerMessageProcessor) Process(r *Raft, m pb.Message) error {
+	if handler, exists := p.handlers[m.MsgType]; exists {
+		return handler.Handle(r, m)
+	}
+	return nil
+}
+
+// Package-level singleton for efficient reuse
+var followerMessageProcessor = NewFollowerMessageProcessor()
+
 // TODO: should we reset electionElapsed for every messages or just heartbeat message?
 func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	if m.Term > r.Term {
@@ -368,93 +455,112 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 		r.becomeFollower(m.Term, None)
 	}
 
-	switch m.MsgType {
-	case pb.MessageType_MsgRequestVote:
-		// TODO: fix this later
-		isLogUpToDate := true
-		canVote := r.Vote == None || r.Vote == m.From
-		reject := m.Term < r.Term || !canVote || !isLogUpToDate
+	return followerMessageProcessor.Process(r, m)
+}
 
-		if !reject {
-			r.Vote = m.From
-			r.electionElapsed = 0
-		}
-		log.Debugf("Node(%v) received MsgRequestVote from Node(%v). Rejected: %v", r.id, m.From, reject)
+// CandidateMessageHandler defines the interface for handling messages in candidate state
+type CandidateMessageHandler interface {
+	Handle(r *Raft, m pb.Message) error
+}
 
-		r.msgs = append(r.msgs, pb.Message{
-			MsgType: pb.MessageType_MsgRequestVoteResponse,
-			To:      m.From,
-			From:    r.id,
-			Term:    r.Term,
-			Reject:  reject,
-		})
-	case pb.MessageType_MsgAppend:
-		r.electionElapsed = 0
-		// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
-		r.Lead = m.From
+// CandidateAppendHandler handles append messages for candidate
+type CandidateAppendHandler struct{}
 
-	case pb.MessageType_MsgHeartbeat:
-		r.electionElapsed = 0
-		// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
-		r.Lead = m.From
-		r.handleHeartbeat(m)
-
-	case pb.MessageType_MsgHup:
-		// Don't have to reset electionElapsed because tick() will reset it
-		r.becomeCandidate()
-		r.sendRequestVoteToAll()
-	}
-
+func (h *CandidateAppendHandler) Handle(r *Raft, m pb.Message) error {
+	r.electionElapsed = 0
+	r.becomeFollower(m.Term, m.From)
 	return nil
 }
 
-func (r *Raft) handleCandidateMessage(m pb.Message) error {
+// CandidateHeartbeatHandler handles heartbeat messages for candidate
+type CandidateHeartbeatHandler struct{}
+
+func (h *CandidateHeartbeatHandler) Handle(r *Raft, m pb.Message) error {
+	r.electionElapsed = 0
+	r.becomeFollower(m.Term, m.From)
+	return nil
+}
+
+// CandidateHupHandler handles hup (election timeout) messages for candidate
+type CandidateHupHandler struct{}
+
+func (h *CandidateHupHandler) Handle(r *Raft, m pb.Message) error {
+	// Don't have to reset electionElapsed because tick() will reset it
+	r.becomeCandidate()
+	r.sendRequestVoteToAll()
+	return nil
+}
+
+// CandidateRequestVoteHandler handles vote request messages for candidate
+type CandidateRequestVoteHandler struct{}
+
+func (h *CandidateRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
+	if m.Term > r.Term {
+		r.becomeFollower(m.Term, None)
+		return r.Step(m)
+	}
+
+	r.msgs = append(r.msgs, pb.Message{
+		MsgType: pb.MessageType_MsgRequestVoteResponse,
+		To:      m.From,
+		From:    r.id,
+		Term:    r.Term,
+		Reject:  true,
+	})
+	return nil
+}
+
+// CandidateRequestVoteResponseHandler handles vote response messages for candidate
+type CandidateRequestVoteResponseHandler struct{}
+
+func (h *CandidateRequestVoteResponseHandler) Handle(r *Raft, m pb.Message) error {
+	if m.Term != r.Term {
+		return nil
+	}
+
+	r.votes[m.From] = !m.Reject
+	log.Debugf("Node(%v) received MsgRequestVoteResponse from Node(%v), rejected: %v", r.id, m.From, m.Reject)
+	if !m.Reject {
+		r.checkAndBecomeLeader()
+	}
+	return nil
+}
+
+// CandidateMessageProcessor manages candidate message handling
+type CandidateMessageProcessor struct {
+	handlers map[pb.MessageType]CandidateMessageHandler
+}
+
+func NewCandidateMessageProcessor() *CandidateMessageProcessor {
+	return &CandidateMessageProcessor{
+		handlers: map[pb.MessageType]CandidateMessageHandler{
+			pb.MessageType_MsgAppend:              &CandidateAppendHandler{},
+			pb.MessageType_MsgHeartbeat:           &CandidateHeartbeatHandler{},
+			pb.MessageType_MsgHup:                 &CandidateHupHandler{},
+			pb.MessageType_MsgRequestVote:         &CandidateRequestVoteHandler{},
+			pb.MessageType_MsgRequestVoteResponse: &CandidateRequestVoteResponseHandler{},
+		},
+	}
+}
+
+func (p *CandidateMessageProcessor) Process(r *Raft, m pb.Message) error {
+	// Check term before processing (except for MsgHup)
 	if uint64(m.MsgType) != uint64(pb.MessageType_MsgHup) && r.Term > m.Term {
 		log.Debugf("Candidate's term(%v) is higher than the message's term(%v)", r.Term, m.Term)
 		return nil
 	}
 
-	switch m.MsgType {
-	case pb.MessageType_MsgAppend:
-		r.electionElapsed = 0
-		r.becomeFollower(m.Term, m.From)
-
-	case pb.MessageType_MsgHeartbeat:
-		r.electionElapsed = 0
-		r.becomeFollower(m.Term, m.From)
-
-	case pb.MessageType_MsgHup:
-		// Don't have to reset electionElapsed because tick() will reset it
-		r.becomeCandidate()
-		r.sendRequestVoteToAll()
-
-	case pb.MessageType_MsgRequestVote:
-		if m.Term > r.Term {
-			r.becomeFollower(m.Term, None)
-			r.Step(m)
-		} else {
-			r.msgs = append(r.msgs, pb.Message{
-				MsgType: pb.MessageType_MsgRequestVoteResponse,
-				To:      m.From,
-				From:    r.id,
-				Term:    r.Term,
-				Reject:  true,
-			})
-		}
-
-	case pb.MessageType_MsgRequestVoteResponse:
-		if m.Term != r.Term {
-			return nil
-		}
-
-		r.votes[m.From] = !m.Reject
-		log.Debugf("Node(%v) received MsgRequestVoteResponse from Node(%v), rejected: %v", r.id, m.From, m.Reject)
-		if !m.Reject {
-			r.checkAndBecomeLeader()
-		}
+	if handler, exists := p.handlers[m.MsgType]; exists {
+		return handler.Handle(r, m)
 	}
-
 	return nil
+}
+
+// Package-level singleton for efficient reuse
+var candidateMessageProcessor = NewCandidateMessageProcessor()
+
+func (r *Raft) handleCandidateMessage(m pb.Message) error {
+	return candidateMessageProcessor.Process(r, m)
 }
 
 // LeaderMessageHandler defines the interface for handling messages in leader state
