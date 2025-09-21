@@ -436,6 +436,19 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 		r.becomeCandidate()
 		r.sendRequestVoteToAll()
 
+	case pb.MessageType_MsgRequestVote:
+		if m.Term > r.Term { 
+    	r.becomeFollower(m.Term, None)
+		} else {
+			r.msgs = append(r.msgs, pb.Message {
+				MsgType: pb.MessageType_MsgRequestVoteResponse,
+				To: m.From,
+				From: r.id,
+				Term: r.Term,
+				Reject: true,
+			})
+		}
+
 	case pb.MessageType_MsgRequestVoteResponse:
 		r.votes[m.From] = !m.Reject
 		log.Debugf("Node(%v) received MsgRequestVoteResponse from Node(%v), rejected: %v", r.id, m.From, m.Reject)
@@ -507,11 +520,6 @@ func (r *Raft) checkAndBecomeLeader() {
 
 // handleAppendEntries handle AppendEntries RPC request
 func (r *Raft) handleAppendEntries(m pb.Message) {
-	// Your Code Here (2A).
-}
-
-// handleHeartbeat handle Heartbeat RPC request
-func (r *Raft) handleHeartbeat(m pb.Message) {
 	// Your Code Here (2A).
 }
 
