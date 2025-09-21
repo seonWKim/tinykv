@@ -16,6 +16,7 @@ package raft
 
 import (
 	"errors"
+	"math/rand"
 
 	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
@@ -136,6 +137,8 @@ type Raft struct {
 	heartbeatTimeout int
 	// baseline of election interval
 	electionTimeout int
+	// randomizedTimeout of election interval
+	randomizedTimeout int
 	// number of ticks since it reached last heartbeatTimeout.
 	// only leader keeps heartbeatElapsed.
 	heartbeatElapsed int
@@ -215,6 +218,8 @@ func newRaft(c *Config) *Raft {
 
 		heartbeatTimeout: c.HeartbeatTick,
 		electionTimeout:  c.ElectionTick,
+		randomizedTimeout: c.ElectionTick + rand.Intn(c.ElectionTick),
+
 		heartbeatElapsed: 0,
 		electionElapsed:  0,
 
@@ -270,7 +275,7 @@ func (r *Raft) tick() {
 
 	case StateCandidate, StateFollower:
 		r.electionElapsed += 1
-		if r.electionElapsed >= r.electionTimeout {
+		if r.electionElapsed >= r.randomizedTimeout {
 			// initialize state for vote
 			r.votes = make(map[uint64]bool)
 
@@ -279,6 +284,7 @@ func (r *Raft) tick() {
 				Term:    r.Term,
 			})
 
+			r.randomizedTimeout = r.electionTimeout + rand.Intn(r.electionTimeout)
 			r.electionElapsed = 0
 		}
 	}
