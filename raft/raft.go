@@ -251,10 +251,10 @@ func (r *Raft) sendHeartbeatToAll() {
 // sendHeartbeat sends a heartbeat RPC to the given peer.
 func (r *Raft) sendHeartbeat(to uint64) {
 	var commit uint64
-	if r.RaftLog != nil { 
+	if r.RaftLog != nil {
 		commit = r.RaftLog.committed
 	}
-	
+
 	r.msgs = append(r.msgs, pb.Message{
 		MsgType: pb.MessageType_MsgHeartbeat,
 		To:      to,
@@ -429,20 +429,24 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 		r.sendRequestVoteToAll()
 
 	case pb.MessageType_MsgRequestVote:
-		if m.Term > r.Term { 
-    	r.becomeFollower(m.Term, None)
+		if m.Term > r.Term {
+			r.becomeFollower(m.Term, None)
 			r.Step(m)
 		} else {
-			r.msgs = append(r.msgs, pb.Message {
+			r.msgs = append(r.msgs, pb.Message{
 				MsgType: pb.MessageType_MsgRequestVoteResponse,
-				To: m.From,
-				From: r.id,
-				Term: r.Term,
-				Reject: true,
+				To:      m.From,
+				From:    r.id,
+				Term:    r.Term,
+				Reject:  true,
 			})
 		}
 
 	case pb.MessageType_MsgRequestVoteResponse:
+		if m.Term != r.Term {
+			return nil
+		}
+
 		r.votes[m.From] = !m.Reject
 		log.Debugf("Node(%v) received MsgRequestVoteResponse from Node(%v), rejected: %v", r.id, m.From, m.Reject)
 		if !m.Reject {
@@ -534,7 +538,6 @@ func (r *Raft) handleHeartbeat(m pb.Message) {
 		Term:    r.Term,
 	})
 }
-
 
 // addNode add a new node to raft group
 func (r *Raft) addNode(id uint64) {
