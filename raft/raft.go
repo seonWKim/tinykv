@@ -409,7 +409,7 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 }
 
 func (r *Raft) handleCandidateMessage(m pb.Message) error {
-	if r.Term > m.Term {
+	if uint64(m.MsgType) != uint64(pb.MessageType_MsgHup) && r.Term > m.Term {
 		log.Debugf("Candidate's term(%v) is higher than the message's term(%v)", r.Term, m.Term)
 		return nil
 	}
