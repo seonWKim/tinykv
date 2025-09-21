@@ -392,7 +392,7 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 		r.electionElapsed = 0
 		// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
 		r.Lead = m.From
-		r.handleHeartbeatMessage(m)
+		r.handleHeartbeat(m)
 
 	case pb.MessageType_MsgHup:
 		// Don't have to reset electionElapsed because tick() will reset it
@@ -401,19 +401,6 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 	}
 
 	return nil
-}
-
-func (r *Raft) handleHeartbeatMessage(m pb.Message) {
-	if m.MsgType != pb.MessageType_MsgHeartbeat {
-		log.Fatal("Not heartbeat message")
-	}
-
-	r.Step(pb.Message{
-		MsgType: pb.MessageType_MsgHeartbeatResponse,
-		To:      m.From,
-		From:    r.id,
-		Term:    r.Term,
-	})
 }
 
 func (r *Raft) handleCandidateMessage(m pb.Message) error {
@@ -527,6 +514,20 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 func (r *Raft) handleSnapshot(m pb.Message) {
 	// Your Code Here (2C).
 }
+
+func (r *Raft) handleHeartbeat(m pb.Message) {
+	if m.MsgType != pb.MessageType_MsgHeartbeat {
+		log.Fatal("Not heartbeat message")
+	}
+
+	r.Step(pb.Message{
+		MsgType: pb.MessageType_MsgHeartbeatResponse,
+		To:      m.From,
+		From:    r.id,
+		Term:    r.Term,
+	})
+}
+
 
 // addNode add a new node to raft group
 func (r *Raft) addNode(id uint64) {
