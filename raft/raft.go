@@ -426,6 +426,7 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 	case pb.MessageType_MsgRequestVote:
 		if m.Term > r.Term { 
     	r.becomeFollower(m.Term, None)
+			r.Step(m)
 		} else {
 			r.msgs = append(r.msgs, pb.Message {
 				MsgType: pb.MessageType_MsgRequestVoteResponse,
@@ -452,6 +453,7 @@ func (r *Raft) handleLeaderMessage(m pb.Message) error {
 	case pb.MessageType_MsgRequestVote:
 		if m.Term > r.Term {
 			r.becomeFollower(m.Term, None)
+			r.Step(m)
 		} else {
 			r.msgs = append(r.msgs, pb.Message{
 				MsgType: pb.MessageType_MsgRequestVoteResponse,
