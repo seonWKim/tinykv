@@ -457,47 +457,97 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 	return nil
 }
 
-func (r *Raft) handleLeaderMessage(m pb.Message) error {
-	switch m.MsgType {
-	case pb.MessageType_MsgRequestVote:
-		if m.Term > r.Term {
-			r.becomeFollower(m.Term, None)
-			r.Step(m)
-		} else {
-			r.msgs = append(r.msgs, pb.Message{
-				MsgType: pb.MessageType_MsgRequestVoteResponse,
-				To:      m.From,
-				From:    r.id,
-				Term:    r.Term,
-				Reject:  true,
-			})
-		}
+// LeaderMessageHandler defines the interface for handling messages in leader state
+type LeaderMessageHandler interface {
+	Handle(r *Raft, m pb.Message) error
+}
 
-	case pb.MessageType_MsgAppend:
-		if r.Term > m.Term {
-			log.Debugf("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
-		} else {
-			log.Debugf("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
-			r.becomeFollower(m.Term, m.From)
-		}
+// RequestVoteHandler handles vote requests for leader
+type RequestVoteHandler struct{}
 
-	case pb.MessageType_MsgPropose:
-		lastIndex := r.RaftLog.LastIndex()
-		for i, entry := range m.Entries {
-			entry.Term = r.Term
-			entry.Index = lastIndex + 1 + uint64(i)
-			r.RaftLog.entries = append(r.RaftLog.entries, *entry)
-		}
-
-		r.Prs[r.id].Match = r.RaftLog.LastIndex()
-		r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
-
-		// TODO: broadcast entries to followers
-	case pb.MessageType_MsgBeat:
-		r.sendHeartbeatToAll()
+func (h *RequestVoteHandler) Handle(r *Raft, m pb.Message) error {
+	if m.Term > r.Term {
+		r.becomeFollower(m.Term, None)
+		return r.Step(m)
 	}
 
+	r.msgs = append(r.msgs, pb.Message{
+		MsgType: pb.MessageType_MsgRequestVoteResponse,
+		To:      m.From,
+		From:    r.id,
+		Term:    r.Term,
+		Reject:  true,
+	})
 	return nil
+}
+
+// AppendHandler handles append messages for leader
+type AppendHandler struct{}
+
+func (h *AppendHandler) Handle(r *Raft, m pb.Message) error {
+	if r.Term > m.Term {
+		log.Debugf("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
+	} else {
+		log.Debugf("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
+		r.becomeFollower(m.Term, m.From)
+	}
+	return nil
+}
+
+// ProposeHandler handles propose messages for leader
+type ProposeHandler struct{}
+
+func (h *ProposeHandler) Handle(r *Raft, m pb.Message) error {
+	lastIndex := r.RaftLog.LastIndex()
+	for i, entry := range m.Entries {
+		entry.Term = r.Term
+		entry.Index = lastIndex + 1 + uint64(i)
+		r.RaftLog.entries = append(r.RaftLog.entries, *entry)
+	}
+
+	r.Prs[r.id].Match = r.RaftLog.LastIndex()
+	r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
+
+	// TODO: broadcast entries to followers
+	return nil
+}
+
+// BeatHandler handles beat messages for leader
+type BeatHandler struct{}
+
+func (h *BeatHandler) Handle(r *Raft, m pb.Message) error {
+	r.sendHeartbeatToAll()
+	return nil
+}
+
+// LeaderMessageProcessor manages leader message handling
+type LeaderMessageProcessor struct {
+	handlers map[pb.MessageType]LeaderMessageHandler
+}
+
+func NewLeaderMessageProcessor() *LeaderMessageProcessor {
+	return &LeaderMessageProcessor{
+		handlers: map[pb.MessageType]LeaderMessageHandler{
+			pb.MessageType_MsgRequestVote: &RequestVoteHandler{},
+			pb.MessageType_MsgAppend:      &AppendHandler{},
+			pb.MessageType_MsgPropose:     &ProposeHandler{},
+			pb.MessageType_MsgBeat:        &BeatHandler{},
+		},
+	}
+}
+
+func (p *LeaderMessageProcessor) Process(r *Raft, m pb.Message) error {
+	if handler, exists := p.handlers[m.MsgType]; exists {
+		return handler.Handle(r, m)
+	}
+	return nil
+}
+
+// Package-level singleton for efficient reuse
+var leaderMessageProcessor = NewLeaderMessageProcessor()
+
+func (r *Raft) handleLeaderMessage(m pb.Message) error {
+	return leaderMessageProcessor.Process(r, m)
 }
 
 func (r *Raft) checkAndBecomeLeader() {
