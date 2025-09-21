@@ -216,8 +216,8 @@ func newRaft(c *Config) *Raft {
 
 		Lead: None,
 
-		heartbeatTimeout: c.HeartbeatTick,
-		electionTimeout:  c.ElectionTick,
+		heartbeatTimeout:  c.HeartbeatTick,
+		electionTimeout:   c.ElectionTick,
 		randomizedTimeout: c.ElectionTick + rand.Intn(c.ElectionTick),
 
 		heartbeatElapsed: 0,
@@ -299,6 +299,7 @@ func (r *Raft) becomeFollower(term uint64, lead uint64) {
 
 	r.Term = term
 	r.Lead = lead
+	r.Vote = None
 	r.State = StateFollower
 }
 
@@ -373,6 +374,7 @@ func (r *Raft) handleFollowerMessage(m pb.Message) error {
 			r.Vote = m.From
 			r.electionElapsed = 0
 		}
+		log.Debugf("Node(%v) received MsgRequestVote from Node(%v). Rejected: %v", r.id, m.From, reject)
 
 		r.msgs = append(r.msgs, pb.Message{
 			MsgType: pb.MessageType_MsgRequestVoteResponse,
@@ -436,6 +438,7 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 
 	case pb.MessageType_MsgRequestVoteResponse:
 		r.votes[m.From] = !m.Reject
+		log.Debugf("Node(%v) received MsgRequestVoteResponse from Node(%v), rejected: %v", r.id, m.From, m.Reject)
 		if !m.Reject {
 			r.checkAndBecomeLeader()
 		}
@@ -446,6 +449,19 @@ func (r *Raft) handleCandidateMessage(m pb.Message) error {
 
 func (r *Raft) handleLeaderMessage(m pb.Message) error {
 	switch m.MsgType {
+	case pb.MessageType_MsgRequestVote:
+		if m.Term > r.Term {
+			r.becomeFollower(m.Term, None)
+		} else {
+			r.msgs = append(r.msgs, pb.Message{
+				MsgType: pb.MessageType_MsgRequestVoteResponse,
+				To:      m.From,
+				From:    r.id,
+				Term:    r.Term,
+				Reject:  true,
+			})
+		}
+
 	case pb.MessageType_MsgAppend:
 		if r.Term > m.Term {
 			log.Debugf("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
@@ -482,6 +498,7 @@ func (r *Raft) checkAndBecomeLeader() {
 		}
 
 		if count > totalNodesCount/2 {
+			log.Debugf("Node(%v) is now leader!!", r.id)
 			r.becomeLeader()
 			break
 		}
