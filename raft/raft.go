@@ -232,8 +232,35 @@ func newRaft(c *Config) *Raft {
 // sendAppend sends an append RPC with new entries (if any) and the
 // current commit index to the given peer. Returns true if a message was sent.
 func (r *Raft) sendAppend(to uint64) bool {
-	// Your Code Here (2A).
-	return false
+	next := r.Prs[to].Next
+	var entries []pb.Entry
+	if next < uint64(len(r.RaftLog.entries)) {
+		entries = r.RaftLog.entries[next:]
+	}
+
+	entryPtrs := []*pb.Entry{}
+	for _, entry := range entries {
+		entryPtrs = append(entryPtrs, &entry)
+	}
+
+	prevLogIndex := next - 1
+	prevLogTerm := uint64(0)
+	if prevLogIndex > 0 && prevLogIndex < uint64(len(r.RaftLog.entries)) {
+		prevLogTerm = r.RaftLog.entries[prevLogIndex].Term
+	}
+
+	r.msgs = append(r.msgs, pb.Message{
+		MsgType: pb.MessageType_MsgAppend,
+		To:      to,
+		From:    r.id,
+		Term:    r.Term,
+		LogTerm: prevLogTerm,
+		Index:   prevLogIndex,
+		Entries: entryPtrs,
+		Commit:  r.RaftLog.committed,
+	})
+
+	return true
 }
 
 func (r *Raft) sendHeartbeatToAll() {
@@ -615,6 +642,14 @@ func (h *ProposeHandler) Handle(r *Raft, m pb.Message) error {
 	r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
 
 	// TODO: broadcast entries to followers
+	for to := range r.Prs {
+		if r.id == to {
+			continue
+		}
+
+		r.sendAppend(to)
+	}
+
 	return nil
 }
 
