@@ -14,7 +14,10 @@
 
 package raft
 
-import pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+import (
+	"github.com/pingcap-incubator/tinykv/log"
+	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+)
 
 // RaftLog manage the log entries, its struct look like:
 //
@@ -70,7 +73,7 @@ func (l *RaftLog) maybeCompact() {
 // note, exclude any dummy entries from the return value.
 // note, this is one of the test stub functions you need to implement.
 func (l *RaftLog) allEntries() []pb.Entry {
-	// TODO: exclude dummy entries 
+	// TODO: exclude dummy entries
 	return l.entries
 }
 
@@ -93,7 +96,13 @@ func (l *RaftLog) LastIndex() uint64 {
 }
 
 func (l *RaftLog) LastTerm() uint64 {
-	// Your Code Here (2A)
+	// TODO: check logic
+	li := l.LastIndex()
+	if li-1 < uint64(len(l.entries)) {
+		return l.entries[li].Term
+	}
+
+	log.Fatalf("li(%v) should not be greater than entries length(%v)", li, len(l.entries))
 	return 0
 }
 
