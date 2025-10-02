@@ -81,9 +81,10 @@ func (l *RaftLog) allEntries() []pb.Entry {
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
-	// Your Code Here (2A).
-	//
-	return nil
+	// TODO: I'm not sure what is the definition of unstable entries. Let's return entries for now 
+	entries := make([]pb.Entry, len(l.entries))
+	copy(entries, l.entries)
+	return entries
 }
 
 // nextEnts returns all the committed but not applied entries
