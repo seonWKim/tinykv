@@ -15,6 +15,8 @@
 package raft
 
 import (
+	"fmt"
+
 	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
@@ -108,6 +110,13 @@ func (l *RaftLog) LastTerm() uint64 {
 
 // Term return the term of the entry in the given index
 func (l *RaftLog) Term(i uint64) (uint64, error) {
-	// Your Code Here (2A).
-	return 0, nil
+	if i == 0 {
+		return 0, nil
+	}
+
+	if i > uint64(len(l.entries)) {
+		return 0, fmt.Errorf("i(%v) should not be greater then entries size(%v)", i, len(l.entries))
+	}
+
+	return l.entries[i].Term, nil
 }
