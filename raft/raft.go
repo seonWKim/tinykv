@@ -660,6 +660,14 @@ func (h *BeatHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
+type HeartBeatHandler struct{}
+
+func (h *HeartBeatHandler) Handle(r *Raft, m pb.Message) error {
+	log.Infof("Leader Received Heartbeat message %v", m)
+
+	return nil
+}
+
 // LeaderMessageProcessor manages leader message handling
 type LeaderMessageProcessor struct {
 	handlers map[pb.MessageType]LeaderMessageHandler
@@ -672,6 +680,7 @@ func NewLeaderMessageProcessor() *LeaderMessageProcessor {
 			pb.MessageType_MsgAppend:      &AppendHandler{},
 			pb.MessageType_MsgPropose:     &ProposeHandler{},
 			pb.MessageType_MsgBeat:        &BeatHandler{},
+			pb.MessageType_MsgHeartbeat:   &HeartBeatHandler{},
 		},
 	}
 }
