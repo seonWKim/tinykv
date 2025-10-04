@@ -63,6 +63,9 @@ project2aa:
 project2ab:
 	$(GOTEST) ./raft -run 2AB
 
+project2ab-raft-only:
+	$(GOTEST) ./raft -run "^(TestProgressLeader2AB|TestLeaderElectionOverwriteNewerLogs2AB|TestLogReplication2AB|TestSingleNodeCommit2AB|TestCommitWithoutNewTermEntry2AB|TestCommitWithHeartbeat2AB|TestDuelingCandidates2AB|TestCandidateConcede2AB|TestOldMessages2AB|TestProposal2AB|TestHandleMessageType_MsgAppend2AB|TestRecvMessageType_MsgRequestVote2AB|TestAllServerStepdown2AB|TestHeartbeatUpdateCommit2AB|TestLeaderIncreaseNext2AB)$$"
+
 project2ac:
 	$(GOTEST) ./raft -run 2AC
 
