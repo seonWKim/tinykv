@@ -81,7 +81,7 @@ func (l *RaftLog) allEntries() []pb.Entry {
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
-	// TODO: I'm not sure what is the definition of unstable entries. Let's return entries for now 
+	// TODO: I'm not sure what is the definition of unstable entries. Let's return entries for now
 	entries := make([]pb.Entry, len(l.entries))
 	copy(entries, l.entries)
 	return entries
@@ -90,7 +90,17 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
-	return nil
+	if l.applied > l.committed {
+		fmt.Errorf("applied(%v) must not be greater than committed(%v)", l.applied, l.committed)
+		return nil
+	}
+
+	entries := make([]pb.Entry, l.committed-l.applied)
+	for idx := l.applied; idx < l.committed; idx++ {
+		entries = append(entries, l.entries[idx])
+	}
+
+	return entries
 }
 
 // LastIndex return the last index of the log entries

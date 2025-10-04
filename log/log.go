@@ -4,7 +4,6 @@
 // The default log output level is INFO, you can change it by:
 // - call log.SetLevel()
 // - set environment variable `LOG_LEVEL`
-
 package log
 
 import (
@@ -48,8 +47,10 @@ const (
 	LOG_LEVEL_ALL   = LOG_LEVEL_DEBUG
 )
 
-const FORMAT_TIME_DAY string = "20060102"
-const FORMAT_TIME_HOUR string = "2006010215"
+const (
+	FORMAT_TIME_DAY  string = "20060102"
+	FORMAT_TIME_HOUR string = "2006010215"
+)
 
 var _log *Logger = New()
 
@@ -65,6 +66,7 @@ func GlobalLogger() *log.Logger {
 func SetLevel(level LogLevel) {
 	_log.SetLevel(level)
 }
+
 func GetLogLevel() LogLevel {
 	return _log.level
 }

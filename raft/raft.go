@@ -641,7 +641,6 @@ func (h *ProposeHandler) Handle(r *Raft, m pb.Message) error {
 	r.Prs[r.id].Match = r.RaftLog.LastIndex()
 	r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
 
-	// TODO: broadcast entries to followers
 	for to := range r.Prs {
 		if r.id == to {
 			continue
