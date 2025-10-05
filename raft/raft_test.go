@@ -318,6 +318,7 @@ func TestSingleNodeCommit2AB(t *testing.T) {
 	}
 }
 
+/// TODO: I'm solving this 
 // TestCommitWithoutNewTermEntry tests the entries could be committed
 // when leader changes with noop entry and no new proposal comes in.
 func TestCommitWithoutNewTermEntry2AB(t *testing.T) {

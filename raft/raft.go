@@ -17,6 +17,7 @@ package raft
 import (
 	"errors"
 	"math/rand"
+	"sort"
 
 	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
@@ -627,6 +628,14 @@ func (h *AppendHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
+type AppendResponseHandler struct{}
+
+func (h *AppendResponseHandler) Handle(r *Raft, m pb.Message) error {
+	log.Debugf("AppendResponseHandler handling %v", m)
+
+	return nil
+}
+
 // ProposeHandler handles propose messages for leader
 type ProposeHandler struct{}
 
@@ -649,11 +658,7 @@ func (h *ProposeHandler) Handle(r *Raft, m pb.Message) error {
 		r.sendAppend(to)
 	}
 
-	// TODO: find a better elegant solution 
-	if len(r.Prs) == 1 {
-		r.RaftLog.committed += 1 
-	}
-	// TODO: I'm not sure whether to set applied here 
+	r.tryAdvanceCommit()
 	return nil
 }
 
@@ -681,11 +686,12 @@ type LeaderMessageProcessor struct {
 func NewLeaderMessageProcessor() *LeaderMessageProcessor {
 	return &LeaderMessageProcessor{
 		handlers: map[pb.MessageType]LeaderMessageHandler{
-			pb.MessageType_MsgRequestVote: &RequestVoteHandler{},
-			pb.MessageType_MsgAppend:      &AppendHandler{},
-			pb.MessageType_MsgPropose:     &ProposeHandler{},
-			pb.MessageType_MsgBeat:        &BeatHandler{},
-			pb.MessageType_MsgHeartbeat:   &HeartBeatHandler{},
+			pb.MessageType_MsgRequestVote:    &RequestVoteHandler{},
+			pb.MessageType_MsgAppend:         &AppendHandler{},
+			pb.MessageType_MsgAppendResponse: &AppendResponseHandler{},
+			pb.MessageType_MsgPropose:        &ProposeHandler{},
+			pb.MessageType_MsgBeat:           &BeatHandler{},
+			pb.MessageType_MsgHeartbeat:      &HeartBeatHandler{},
 		},
 	}
 }
@@ -751,4 +757,22 @@ func (r *Raft) addNode(id uint64) {
 // removeNode remove a node from raft group
 func (r *Raft) removeNode(id uint64) {
 	// Your Code Here (3A).
+}
+
+func (r *Raft) tryAdvanceCommit() {
+	matchIndices := make([]uint64, len(r.Prs))
+	for _, p := range r.Prs {
+		matchIndices = append(matchIndices, p.Match)
+	}
+
+	sort.Slice(matchIndices, func(i, j int) bool {
+		return matchIndices[i] < matchIndices[j]
+	})
+
+	majorityIndex := len(matchIndices) / 2
+	newCommit := matchIndices[majorityIndex]
+	if newCommit > r.RaftLog.committed {
+		r.RaftLog.committed = newCommit
+		log.Debugf("Advancing commit to %v", newCommit)
+	}
 }
