@@ -649,6 +649,10 @@ func (h *ProposeHandler) Handle(r *Raft, m pb.Message) error {
 		r.sendAppend(to)
 	}
 
+	// TODO: check whether it's okay to update the commit index here. Propose messages are leader's local message, so I think it's okay
+	// But to be sure, shouldn't we store the entries in r.RaftLog.Storage?  
+	r.RaftLog.committed += 1 
+	// TODO: I'm not sure whether to set applied here 
 	return nil
 }
 
