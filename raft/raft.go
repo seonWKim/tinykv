@@ -235,9 +235,10 @@ func newRaft(c *Config) *Raft {
 // current commit index to the given peer. Returns true if a message was sent.
 func (r *Raft) sendAppend(to uint64) bool {
 	next := r.Prs[to].Next
+	log.Debugf("to(%v), next(%v), len(%v)", to, next, len(r.RaftLog.entries))
 	var entries []pb.Entry
-	if next < uint64(len(r.RaftLog.entries)) {
-		entries = r.RaftLog.entries[next:]
+	if next <= uint64(len(r.RaftLog.entries)) {
+		entries = r.RaftLog.entries[next-1:]
 	}
 
 	entryPtrs := []*pb.Entry{}
@@ -247,9 +248,11 @@ func (r *Raft) sendAppend(to uint64) bool {
 
 	prevLogIndex := next - 1
 	prevLogTerm := uint64(0)
-	if prevLogIndex > 0 && prevLogIndex < uint64(len(r.RaftLog.entries)) {
-		prevLogTerm = r.RaftLog.entries[prevLogIndex].Term
+	term, err := r.RaftLog.Term(prevLogIndex)
+	if err != nil {
+		return false 
 	}
+	prevLogTerm = term 
 
 	r.msgs = append(r.msgs, pb.Message{
 		MsgType: pb.MessageType_MsgAppend,
@@ -504,15 +507,16 @@ func (h *FollowerMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 
 	// Send success response with the index of the last appended entry
 	lastAppendedIndex := m.Index + uint64(len(m.Entries))
-	r.msgs = append(r.msgs, pb.Message{
+	msg := pb.Message {
 		MsgType: pb.MessageType_MsgAppendResponse,
 		To:      m.From,
 		From:    r.id,
 		Term:    r.Term,
 		Index:   lastAppendedIndex,
 		Reject:  false,
-	})
-
+	}
+	r.msgs = append(r.msgs, msg)
+	log.Debugf("AppendHandler handling: %v", msg)
 	return nil
 }
 
@@ -746,6 +750,8 @@ type LeaderMsgProposeHandler struct{}
 
 func (h *LeaderMsgProposeHandler) Handle(r *Raft, m pb.Message) error {
 	lastIndex := r.RaftLog.LastIndex()
+
+	log.Debugf("message length: %v", len(m.Entries))
 	for i, entry := range m.Entries {
 		entry.Term = r.Term
 		entry.Index = lastIndex + 1 + uint64(i)
@@ -754,6 +760,7 @@ func (h *LeaderMsgProposeHandler) Handle(r *Raft, m pb.Message) error {
 
 	r.Prs[r.id].Match = r.RaftLog.LastIndex()
 	r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
+	log.Debugf("Node(%v) Prs: %v", r.id, r.Prs[r.id])
 
 	for to := range r.Prs {
 		if r.id == to {
@@ -881,7 +888,6 @@ func (r *Raft) tryAdvanceCommit() {
 	if newCommit > r.RaftLog.committed && newCommit > 0 && newCommit < uint64(len(r.RaftLog.entries)) {
 		if r.RaftLog.entries[newCommit].Term == r.Term {
 			r.RaftLog.committed = newCommit
-			log.Debug("MatchIndices: %v", matchIndices)
 			log.Debugf("Advancing Node(%v) commit to %v", r.id, newCommit)
 		}
 	}
