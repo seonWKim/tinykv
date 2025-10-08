@@ -111,15 +111,15 @@ func (l *RaftLog) LastIndex() uint64 {
 func (l *RaftLog) LastTerm() uint64 {
 	// TODO: check logic
 	li := l.LastIndex()
-	if li-1 < uint64(len(l.entries)) {
-		return l.entries[li].Term
+	if li <= uint64(len(l.entries)) {
+		return l.entries[li-1].Term
 	}
 
 	log.Fatalf("li(%v) should not be greater than entries length(%v)", li, len(l.entries))
 	return 0
 }
 
-// Term return the term of the entry in the given index
+// Term return the term of the entry in the given log index 
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	if i == 0 {
 		return 0, nil
@@ -129,5 +129,5 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 		return 0, fmt.Errorf("i(%v) should not be greater then entries size(%v)", i, len(l.entries))
 	}
 
-	return l.entries[i].Term, nil
+	return l.entries[i-1].Term, nil
 }
