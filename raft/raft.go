@@ -368,6 +368,17 @@ func (r *Raft) becomeLeader() {
 	r.State = StateLeader
 	r.Lead = r.id
 
+	lastIndex := r.RaftLog.LastIndex()
+	for id := range r.Prs {
+		if id == r.id { 
+			r.Prs[id].Match = lastIndex
+			r.Prs[id].Next = lastIndex + 1
+		} else {
+			r.Prs[id].Match = 0 
+			r.Prs[id].Next = lastIndex + 1
+		}
+	}
+
 	// NOTE: This will cause the leader to append no-op entry to its log and then replicate it to its followers
 	r.Step(pb.Message{
 		MsgType: pb.MessageType_MsgPropose,
@@ -713,10 +724,11 @@ func (h *LeaderMsgAppendResponseHandler) Handle(r *Raft, m pb.Message) error {
 	if m.Reject {
 		// Follower rejected: decrement Next and retry
 		// The follower's log is inconsistent, so we need to backtrack
+		log.Debugf("Node(%v)'s Next: %v", m.From, r.Prs[m.From])
 		if r.Prs[m.From].Next > 1 {
 			r.Prs[m.From].Next--
+		  r.sendAppend(m.From)
 		}
-		r.sendAppend(m.From)
 	} else {
 		// Success: update Match and Next indices for this follower
 		r.Prs[m.From].Match = m.Index
@@ -866,6 +878,6 @@ func (r *Raft) tryAdvanceCommit() {
 	newCommit := matchIndices[majorityIndex]
 	if newCommit > r.RaftLog.committed {
 		r.RaftLog.committed = newCommit
-		log.Debugf("Advancing commit to %v", newCommit)
+		log.Debugf("Advancing Node(%v) commit to %v", r.id, newCommit)
 	}
 }
