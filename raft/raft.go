@@ -395,10 +395,10 @@ type FollowerMessageHandler interface {
 	Handle(r *Raft, m pb.Message) error
 }
 
-// FollowerRequestVoteHandler handles vote request messages for follower
-type FollowerRequestVoteHandler struct{}
+// FollowerMsgRequestVoteHandler handles vote request messages for follower
+type FollowerMsgRequestVoteHandler struct{}
 
-func (h *FollowerRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
+func (h *FollowerMsgRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
 	// TODO: fix this later
 	isLogUpToDate := true
 	canVote := r.Vote == None || r.Vote == m.From
@@ -420,10 +420,10 @@ func (h *FollowerRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
-// FollowerAppendHandler handles append messages for follower
-type FollowerAppendHandler struct{}
+// FollowerMgsAppendHandler handles append messages for follower
+type FollowerMgsAppendHandler struct{}
 
-func (h *FollowerAppendHandler) Handle(r *Raft, m pb.Message) error {
+func (h *FollowerMgsAppendHandler) Handle(r *Raft, m pb.Message) error {
 	if m.Term >= r.Term {
 		r.electionElapsed = 0
 		r.Lead = m.From
@@ -503,10 +503,10 @@ func (h *FollowerAppendHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
-// FollowerHeartbeatHandler handles heartbeat messages for follower
-type FollowerHeartbeatHandler struct{}
+// FollowerMsgHeartbeatHandler handles heartbeat messages for follower
+type FollowerMsgHeartbeatHandler struct{}
 
-func (h *FollowerHeartbeatHandler) Handle(r *Raft, m pb.Message) error {
+func (h *FollowerMsgHeartbeatHandler) Handle(r *Raft, m pb.Message) error {
 	r.electionElapsed = 0
 	// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
 	r.Lead = m.From
@@ -514,10 +514,10 @@ func (h *FollowerHeartbeatHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
-// FollowerHupHandler handles hup (election timeout) messages for follower
-type FollowerHupHandler struct{}
+// FollowerMsgHupHandler handles hup (election timeout) messages for follower
+type FollowerMsgHupHandler struct{}
 
-func (h *FollowerHupHandler) Handle(r *Raft, m pb.Message) error {
+func (h *FollowerMsgHupHandler) Handle(r *Raft, m pb.Message) error {
 	// Don't have to reset electionElapsed because tick() will reset it
 	r.becomeCandidate()
 	r.sendRequestVoteToAll()
@@ -532,10 +532,10 @@ type FollowerMessageProcessor struct {
 func NewFollowerMessageProcessor() *FollowerMessageProcessor {
 	return &FollowerMessageProcessor{
 		handlers: map[pb.MessageType]FollowerMessageHandler{
-			pb.MessageType_MsgRequestVote: &FollowerRequestVoteHandler{},
-			pb.MessageType_MsgAppend:      &FollowerAppendHandler{},
-			pb.MessageType_MsgHeartbeat:   &FollowerHeartbeatHandler{},
-			pb.MessageType_MsgHup:         &FollowerHupHandler{},
+			pb.MessageType_MsgRequestVote: &FollowerMsgRequestVoteHandler{},
+			pb.MessageType_MsgAppend:      &FollowerMgsAppendHandler{},
+			pb.MessageType_MsgHeartbeat:   &FollowerMsgHeartbeatHandler{},
+			pb.MessageType_MsgHup:         &FollowerMsgHupHandler{},
 		},
 	}
 }
@@ -565,38 +565,38 @@ type CandidateMessageHandler interface {
 	Handle(r *Raft, m pb.Message) error
 }
 
-// CandidateAppendHandler handles append messages for candidate
-type CandidateAppendHandler struct{}
+// CandidateMsgAppendHandler handles append messages for candidate
+type CandidateMsgAppendHandler struct{}
 
-func (h *CandidateAppendHandler) Handle(r *Raft, m pb.Message) error {
+func (h *CandidateMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 	r.electionElapsed = 0
 	r.becomeFollower(m.Term, m.From)
 	return nil
 }
 
-// CandidateHeartbeatHandler handles heartbeat messages for candidate
-type CandidateHeartbeatHandler struct{}
+// CandidateMsgHeartbeatHandler handles heartbeat messages for candidate
+type CandidateMsgHeartbeatHandler struct{}
 
-func (h *CandidateHeartbeatHandler) Handle(r *Raft, m pb.Message) error {
+func (h *CandidateMsgHeartbeatHandler) Handle(r *Raft, m pb.Message) error {
 	r.electionElapsed = 0
 	r.becomeFollower(m.Term, m.From)
 	return nil
 }
 
-// CandidateHupHandler handles hup (election timeout) messages for candidate
-type CandidateHupHandler struct{}
+// CandidateMsgHupHandler handles hup (election timeout) messages for candidate
+type CandidateMsgHupHandler struct{}
 
-func (h *CandidateHupHandler) Handle(r *Raft, m pb.Message) error {
+func (h *CandidateMsgHupHandler) Handle(r *Raft, m pb.Message) error {
 	// Don't have to reset electionElapsed because tick() will reset it
 	r.becomeCandidate()
 	r.sendRequestVoteToAll()
 	return nil
 }
 
-// CandidateRequestVoteHandler handles vote request messages for candidate
-type CandidateRequestVoteHandler struct{}
+// CandidateMsgRequestVoteHandler handles vote request messages for candidate
+type CandidateMsgRequestVoteHandler struct{}
 
-func (h *CandidateRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
+func (h *CandidateMsgRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
 	if m.Term > r.Term {
 		r.becomeFollower(m.Term, None)
 		return r.Step(m)
@@ -612,10 +612,10 @@ func (h *CandidateRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
-// CandidateRequestVoteResponseHandler handles vote response messages for candidate
-type CandidateRequestVoteResponseHandler struct{}
+// CandidateMsgRequestVoteResponseHandler handles vote response messages for candidate
+type CandidateMsgRequestVoteResponseHandler struct{}
 
-func (h *CandidateRequestVoteResponseHandler) Handle(r *Raft, m pb.Message) error {
+func (h *CandidateMsgRequestVoteResponseHandler) Handle(r *Raft, m pb.Message) error {
 	if m.Term != r.Term {
 		return nil
 	}
@@ -636,11 +636,11 @@ type CandidateMessageProcessor struct {
 func NewCandidateMessageProcessor() *CandidateMessageProcessor {
 	return &CandidateMessageProcessor{
 		handlers: map[pb.MessageType]CandidateMessageHandler{
-			pb.MessageType_MsgAppend:              &CandidateAppendHandler{},
-			pb.MessageType_MsgHeartbeat:           &CandidateHeartbeatHandler{},
-			pb.MessageType_MsgHup:                 &CandidateHupHandler{},
-			pb.MessageType_MsgRequestVote:         &CandidateRequestVoteHandler{},
-			pb.MessageType_MsgRequestVoteResponse: &CandidateRequestVoteResponseHandler{},
+			pb.MessageType_MsgAppend:              &CandidateMsgAppendHandler{},
+			pb.MessageType_MsgHeartbeat:           &CandidateMsgHeartbeatHandler{},
+			pb.MessageType_MsgHup:                 &CandidateMsgHupHandler{},
+			pb.MessageType_MsgRequestVote:         &CandidateMsgRequestVoteHandler{},
+			pb.MessageType_MsgRequestVoteResponse: &CandidateMsgRequestVoteResponseHandler{},
 		},
 	}
 }
