@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -323,16 +324,17 @@ func TestSingleNodeCommit2AB(t *testing.T) {
 // when leader changes with noop entry and no new proposal comes in.
 func TestCommitWithoutNewTermEntry2AB(t *testing.T) {
 	tt := newNetwork(nil, nil, nil, nil, nil)
+	log.Info("Node(1) <- MessageType_MsgHup Ready")
 	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
-
+	log.Info("Node(1) <- MessageType_MsgHup Sent")
 	// 0 cannot reach 2,3,4
 	tt.cut(1, 3)
 	tt.cut(1, 4)
 	tt.cut(1, 5)
-
+	log.Info("Node(1) <- MessageType_MsgPropose Ready")
 	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("some data")}}})
 	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("some data")}}})
-
+	log.Info("Node(1) <- MessageType_MsgPropose Sent")
 	sm := tt.peers[1].(*Raft)
 	if sm.RaftLog.committed != 1 {
 		t.Errorf("committed = %d, want %d", sm.RaftLog.committed, 1)
@@ -344,7 +346,9 @@ func TestCommitWithoutNewTermEntry2AB(t *testing.T) {
 	// elect 2 as the new leader with term 2
 	// after append a ChangeTerm entry from the current term, all entries
 	// should be committed
+	log.Info("Node(2) <- MessageType_MsgHup Ready")
 	tt.send(pb.Message{From: 2, To: 2, MsgType: pb.MessageType_MsgHup})
+	log.Info("Node(2) <- MessageType_MsgHup Sent")
 
 	if sm.RaftLog.committed != 4 {
 		t.Errorf("committed = %d, want %d", sm.RaftLog.committed, 4)

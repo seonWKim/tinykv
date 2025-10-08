@@ -596,10 +596,10 @@ type LeaderMessageHandler interface {
 	Handle(r *Raft, m pb.Message) error
 }
 
-// RequestVoteHandler handles vote requests for leader
-type RequestVoteHandler struct{}
+// LeaderMsgRequestVoteHandler handles vote requests for leader
+type LeaderMsgRequestVoteHandler struct{}
 
-func (h *RequestVoteHandler) Handle(r *Raft, m pb.Message) error {
+func (h *LeaderMsgRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
 	if m.Term > r.Term {
 		r.becomeFollower(m.Term, None)
 		return r.Step(m)
@@ -615,10 +615,10 @@ func (h *RequestVoteHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
-// AppendHandler handles append messages for leader
-type AppendHandler struct{}
+// LeaderMsgAppendHandler handles append messages for leader
+type LeaderMsgAppendHandler struct{}
 
-func (h *AppendHandler) Handle(r *Raft, m pb.Message) error {
+func (h *LeaderMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 	if r.Term > m.Term {
 		log.Debugf("How dare you send message with term(%v), I'm the leader with term %v", m.Term, r.Term)
 	} else {
@@ -628,18 +628,18 @@ func (h *AppendHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
-type AppendResponseHandler struct{}
+type LeaderMsgAppendResponseHandler struct{}
 
-func (h *AppendResponseHandler) Handle(r *Raft, m pb.Message) error {
+func (h *LeaderMsgAppendResponseHandler) Handle(r *Raft, m pb.Message) error {
 	log.Debugf("AppendResponseHandler handling %v", m)
 
 	return nil
 }
 
-// ProposeHandler handles propose messages for leader
-type ProposeHandler struct{}
+// LeaderMsgProposeHandler handles propose messages for leader
+type LeaderMsgProposeHandler struct{}
 
-func (h *ProposeHandler) Handle(r *Raft, m pb.Message) error {
+func (h *LeaderMsgProposeHandler) Handle(r *Raft, m pb.Message) error {
 	lastIndex := r.RaftLog.LastIndex()
 	for i, entry := range m.Entries {
 		entry.Term = r.Term
@@ -662,17 +662,17 @@ func (h *ProposeHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
-// BeatHandler handles beat messages for leader
-type BeatHandler struct{}
+// LeaderMsgBeatHandler handles beat messages for leader
+type LeaderMsgBeatHandler struct{}
 
-func (h *BeatHandler) Handle(r *Raft, m pb.Message) error {
+func (h *LeaderMsgBeatHandler) Handle(r *Raft, m pb.Message) error {
 	r.sendHeartbeatToAll()
 	return nil
 }
 
-type HeartBeatHandler struct{}
+type LeaderMsgHeartBeatHandler struct{}
 
-func (h *HeartBeatHandler) Handle(r *Raft, m pb.Message) error {
+func (h *LeaderMsgHeartBeatHandler) Handle(r *Raft, m pb.Message) error {
 	log.Infof("Leader Received Heartbeat message %v", m)
 
 	return nil
@@ -686,12 +686,12 @@ type LeaderMessageProcessor struct {
 func NewLeaderMessageProcessor() *LeaderMessageProcessor {
 	return &LeaderMessageProcessor{
 		handlers: map[pb.MessageType]LeaderMessageHandler{
-			pb.MessageType_MsgRequestVote:    &RequestVoteHandler{},
-			pb.MessageType_MsgAppend:         &AppendHandler{},
-			pb.MessageType_MsgAppendResponse: &AppendResponseHandler{},
-			pb.MessageType_MsgPropose:        &ProposeHandler{},
-			pb.MessageType_MsgBeat:           &BeatHandler{},
-			pb.MessageType_MsgHeartbeat:      &HeartBeatHandler{},
+			pb.MessageType_MsgRequestVote:    &LeaderMsgRequestVoteHandler{},
+			pb.MessageType_MsgAppend:         &LeaderMsgAppendHandler{},
+			pb.MessageType_MsgAppendResponse: &LeaderMsgAppendResponseHandler{},
+			pb.MessageType_MsgPropose:        &LeaderMsgProposeHandler{},
+			pb.MessageType_MsgBeat:           &LeaderMsgBeatHandler{},
+			pb.MessageType_MsgHeartbeat:      &LeaderMsgHeartBeatHandler{},
 		},
 	}
 }
