@@ -235,7 +235,6 @@ func newRaft(c *Config) *Raft {
 // current commit index to the given peer. Returns true if a message was sent.
 func (r *Raft) sendAppend(to uint64) bool {
 	next := r.Prs[to].Next
-	log.Debugf("to(%v), next(%v), len(%v)", to, next, len(r.RaftLog.entries))
 	var entries []pb.Entry
 	if next <= uint64(len(r.RaftLog.entries)) {
 		entries = r.RaftLog.entries[next-1:]
@@ -373,11 +372,11 @@ func (r *Raft) becomeLeader() {
 
 	lastIndex := r.RaftLog.LastIndex()
 	for id := range r.Prs {
-		if id == r.id { 
+		if id == r.id {
 			r.Prs[id].Match = lastIndex
 			r.Prs[id].Next = lastIndex + 1
 		} else {
-			r.Prs[id].Match = 0 
+			r.Prs[id].Match = 0
 			r.Prs[id].Next = lastIndex + 1
 		}
 	}
@@ -482,17 +481,23 @@ func (h *FollowerMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 
 	// Append new entries - handle conflicts by deleting inconsistent entries
 	for i, entry := range m.Entries {
-		index := m.Index + 1 + uint64(i)
+		index := m.Index + 1 + uint64(i) // 1-based log index
 
+		// Convert to 0-based array index for checking/accessing
 		// If entry exists at this index with different term, delete it and all following
-		if index < uint64(len(r.RaftLog.entries)) && r.RaftLog.entries[index].Term != entry.Term {
-			r.RaftLog.entries = r.RaftLog.entries[:index]
+		if index <= uint64(len(r.RaftLog.entries)) {
+			// Entry exists, check for conflict
+			if r.RaftLog.entries[index-1].Term != entry.Term {
+				// Conflict: delete this and all following entries
+				r.RaftLog.entries = r.RaftLog.entries[:index-1]
+			} else {
+				// No conflict, entry already matches, skip appending
+				continue
+			}
 		}
 
-		// Append if not already present
-		if index >= uint64(len(r.RaftLog.entries)) {
-			r.RaftLog.entries = append(r.RaftLog.entries, *entry)
-		}
+		// Append entry (either after deletion or if not present)
+		r.RaftLog.entries = append(r.RaftLog.entries, *entry)
 	}
 
 	// Update committed index: min(leaderCommit, index of last new entry)
@@ -507,16 +512,14 @@ func (h *FollowerMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 
 	// Send success response with the index of the last appended entry
 	lastAppendedIndex := m.Index + uint64(len(m.Entries))
-	msg := pb.Message {
+	r.msgs = append(r.msgs, pb.Message{
 		MsgType: pb.MessageType_MsgAppendResponse,
 		To:      m.From,
 		From:    r.id,
 		Term:    r.Term,
 		Index:   lastAppendedIndex,
 		Reject:  false,
-	}
-	r.msgs = append(r.msgs, msg)
-	log.Debugf("AppendHandler handling: %v", msg)
+	})
 	return nil
 }
 
@@ -527,6 +530,18 @@ func (h *FollowerMsgHeartbeatHandler) Handle(r *Raft, m pb.Message) error {
 	r.electionElapsed = 0
 	// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
 	r.Lead = m.From
+
+	// Update commit index based on leader's commit in the heartbeat
+	if m.Commit > r.RaftLog.committed {
+		// Commit up to min(leaderCommit, lastIndex)
+		lastIndex := r.RaftLog.LastIndex()
+		if m.Commit < lastIndex {
+			r.RaftLog.committed = m.Commit
+		} else {
+			r.RaftLog.committed = lastIndex
+		}
+	}
+
 	r.handleHeartbeat(m)
 	return nil
 }
@@ -723,15 +738,12 @@ func (h *LeaderMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 type LeaderMsgAppendResponseHandler struct{}
 
 func (h *LeaderMsgAppendResponseHandler) Handle(r *Raft, m pb.Message) error {
-	log.Debugf("AppendResponseHandler handling %v", m)
-
 	if m.Reject {
 		// Follower rejected: decrement Next and retry
 		// The follower's log is inconsistent, so we need to backtrack
-		log.Debugf("Node(%v)'s Next: %v", m.From, r.Prs[m.From])
 		if r.Prs[m.From].Next > 1 {
 			r.Prs[m.From].Next--
-		  r.sendAppend(m.From)
+			r.sendAppend(m.From)
 		}
 	} else {
 		// Success: update Match and Next indices for this follower
@@ -739,7 +751,17 @@ func (h *LeaderMsgAppendResponseHandler) Handle(r *Raft, m pb.Message) error {
 		r.Prs[m.From].Next = m.Index + 1
 
 		// Try to advance commit index if a majority have replicated entries
+		oldCommit := r.RaftLog.committed
 		r.tryAdvanceCommit()
+
+		// If commit advanced, notify all followers by sending AppendEntries
+		if r.RaftLog.committed > oldCommit {
+			for id := range r.Prs {
+				if id != r.id {
+					r.sendAppend(id)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -751,7 +773,6 @@ type LeaderMsgProposeHandler struct{}
 func (h *LeaderMsgProposeHandler) Handle(r *Raft, m pb.Message) error {
 	lastIndex := r.RaftLog.LastIndex()
 
-	log.Debugf("message length: %v", len(m.Entries))
 	for i, entry := range m.Entries {
 		entry.Term = r.Term
 		entry.Index = lastIndex + 1 + uint64(i)
@@ -760,7 +781,6 @@ func (h *LeaderMsgProposeHandler) Handle(r *Raft, m pb.Message) error {
 
 	r.Prs[r.id].Match = r.RaftLog.LastIndex()
 	r.Prs[r.id].Next = r.RaftLog.LastIndex() + 1
-	log.Debugf("Node(%v) Prs: %v", r.id, r.Prs[r.id])
 
 	for to := range r.Prs {
 		if r.id == to {
@@ -885,8 +905,9 @@ func (r *Raft) tryAdvanceCommit() {
 	newCommit := matchIndices[majorityIndex]
 
 	// Only commit entries from the current term (Raft safety requirement)
-	if newCommit > r.RaftLog.committed && newCommit > 0 && newCommit < uint64(len(r.RaftLog.entries)) {
-		if r.RaftLog.entries[newCommit].Term == r.Term {
+	if newCommit > r.RaftLog.committed && newCommit > 0 && newCommit <= uint64(len(r.RaftLog.entries)) {
+		// Convert 1-based index to 0-based for array access
+		if r.RaftLog.entries[newCommit-1].Term == r.Term {
 			r.RaftLog.committed = newCommit
 			log.Debugf("Advancing Node(%v) commit to %v", r.id, newCommit)
 		}
