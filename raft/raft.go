@@ -420,10 +420,10 @@ func (h *FollowerMsgRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
 	return nil
 }
 
-// FollowerMgsAppendHandler handles append messages for follower
-type FollowerMgsAppendHandler struct{}
+// FollowerMsgAppendHandler handles append messages for follower
+type FollowerMsgAppendHandler struct{}
 
-func (h *FollowerMgsAppendHandler) Handle(r *Raft, m pb.Message) error {
+func (h *FollowerMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 	if m.Term >= r.Term {
 		r.electionElapsed = 0
 		r.Lead = m.From
@@ -533,7 +533,7 @@ func NewFollowerMessageProcessor() *FollowerMessageProcessor {
 	return &FollowerMessageProcessor{
 		handlers: map[pb.MessageType]FollowerMessageHandler{
 			pb.MessageType_MsgRequestVote: &FollowerMsgRequestVoteHandler{},
-			pb.MessageType_MsgAppend:      &FollowerMgsAppendHandler{},
+			pb.MessageType_MsgAppend:      &FollowerMsgAppendHandler{},
 			pb.MessageType_MsgHeartbeat:   &FollowerMsgHeartbeatHandler{},
 			pb.MessageType_MsgHup:         &FollowerMsgHupHandler{},
 		},
@@ -699,6 +699,9 @@ func (h *LeaderMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 		log.Debugf("A new leader with term %v. Should I(term=%v) fall back to follower?", m.Term, r.Term)
 		r.becomeFollower(m.Term, m.From)
 	}
+
+  // 
+
 	return nil
 }
 
