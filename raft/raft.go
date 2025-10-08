@@ -491,12 +491,14 @@ func (h *FollowerMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 		}
 	}
 
-	// Send success response
+	// Send success response with the index of the last appended entry
+	lastAppendedIndex := m.Index + uint64(len(m.Entries))
 	r.msgs = append(r.msgs, pb.Message{
 		MsgType: pb.MessageType_MsgAppendResponse,
 		To:      m.From,
 		From:    r.id,
 		Term:    r.Term,
+		Index:   lastAppendedIndex,
 		Reject:  false,
 	})
 
@@ -700,8 +702,6 @@ func (h *LeaderMsgAppendHandler) Handle(r *Raft, m pb.Message) error {
 		r.becomeFollower(m.Term, m.From)
 	}
 
-  // 
-
 	return nil
 }
 
@@ -709,6 +709,22 @@ type LeaderMsgAppendResponseHandler struct{}
 
 func (h *LeaderMsgAppendResponseHandler) Handle(r *Raft, m pb.Message) error {
 	log.Debugf("AppendResponseHandler handling %v", m)
+
+	if m.Reject {
+		// Follower rejected: decrement Next and retry
+		// The follower's log is inconsistent, so we need to backtrack
+		if r.Prs[m.From].Next > 1 {
+			r.Prs[m.From].Next--
+		}
+		r.sendAppend(m.From)
+	} else {
+		// Success: update Match and Next indices for this follower
+		r.Prs[m.From].Match = m.Index
+		r.Prs[m.From].Next = m.Index + 1
+
+		// Try to advance commit index if a majority have replicated entries
+		r.tryAdvanceCommit()
+	}
 
 	return nil
 }
