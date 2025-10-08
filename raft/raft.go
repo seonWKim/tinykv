@@ -249,9 +249,9 @@ func (r *Raft) sendAppend(to uint64) bool {
 	prevLogTerm := uint64(0)
 	term, err := r.RaftLog.Term(prevLogIndex)
 	if err != nil {
-		return false 
+		return false
 	}
-	prevLogTerm = term 
+	prevLogTerm = term
 
 	r.msgs = append(r.msgs, pb.Message{
 		MsgType: pb.MessageType_MsgAppend,

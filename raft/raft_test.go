@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -319,19 +318,18 @@ func TestSingleNodeCommit2AB(t *testing.T) {
 	}
 }
 
-/// TODO: I'm solving this 
 // TestCommitWithoutNewTermEntry tests the entries could be committed
 // when leader changes with noop entry and no new proposal comes in.
 func TestCommitWithoutNewTermEntry2AB(t *testing.T) {
 	tt := newNetwork(nil, nil, nil, nil, nil)
 
 	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
-	
+
 	// 0 cannot reach 2,3,4
 	tt.cut(1, 3)
 	tt.cut(1, 4)
 	tt.cut(1, 5)
-	
+
 	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("some data")}}})
 	tt.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgPropose, Entries: []*pb.Entry{{Data: []byte("some data")}}})
 
@@ -506,8 +504,10 @@ func TestOldMessages2AB(t *testing.T) {
 
 	ilog := newLog(
 		newMemoryStorageWithEnts([]pb.Entry{
-			{}, {Data: nil, Term: 1, Index: 1},
-			{Data: nil, Term: 2, Index: 2}, {Data: nil, Term: 3, Index: 3},
+			{},
+			{Data: nil, Term: 1, Index: 1},
+			{Data: nil, Term: 2, Index: 2},
+			{Data: nil, Term: 3, Index: 3},
 			{Data: []byte("somedata"), Term: 3, Index: 4},
 		}))
 	ilog.committed = 4
@@ -565,10 +565,10 @@ func TestProposal2AB(t *testing.T) {
 }
 
 // TestHandleMessageType_MsgAppend ensures:
-// 1. Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm.
-// 2. If an existing entry conflicts with a new one (same index but different terms),
-//    delete the existing entry and all that follow it; append any new entries not already in the log.
-// 3. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry).
+//  1. Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm.
+//  2. If an existing entry conflicts with a new one (same index but different terms),
+//     delete the existing entry and all that follow it; append any new entries not already in the log.
+//  3. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry).
 func TestHandleMessageType_MsgAppend2AB(t *testing.T) {
 	tests := []struct {
 		m       pb.Message
