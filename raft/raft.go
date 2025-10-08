@@ -435,30 +435,69 @@ func (h *FollowerAppendHandler) Handle(r *Raft, m pb.Message) error {
 		return fmt.Errorf("error retrieving last index: %v", err)
 	}
 
-	if m.Index != lastIndex {
-		// TODO: determine what we should do
+	// Consistency check 1: Reply false if log doesn't contain an entry at prevLogIndex (m.Index)
+	if m.Index > lastIndex {
+		r.msgs = append(r.msgs, pb.Message{
+			MsgType: pb.MessageType_MsgAppendResponse,
+			To:      m.From,
+			From:    r.id,
+			Term:    r.Term,
+			Reject:  true,
+		})
+		return nil
 	}
 
-	lastTerm, err := r.RaftLog.storage.Term(lastIndex)
-	if err != nil {
-		return fmt.Errorf("error retrieving last term: %v", err)
-	}
-	if m.Term != lastTerm {
-		// TODO: determine what we should do
+	// Consistency check 2: Reply false if term at prevLogIndex doesn't match prevLogTerm (m.LogTerm)
+	if m.Index > 0 {
+		prevTerm, err := r.RaftLog.storage.Term(m.Index)
+		if err != nil {
+			return fmt.Errorf("error retrieving term at index %v: %v", m.Index, err)
+		}
+
+		if prevTerm != m.LogTerm {
+			r.msgs = append(r.msgs, pb.Message{
+				MsgType: pb.MessageType_MsgAppendResponse,
+				To:      m.From,
+				From:    r.id,
+				Term:    r.Term,
+				Reject:  true,
+			})
+			return nil
+		}
 	}
 
-	// TODO: committed means we stored the data into stable storage. Is it safe to increase commiitted here?
-	for _, entry := range m.Entries {
-		r.RaftLog.entries = append(r.RaftLog.entries, *entry)
-	}
-	r.RaftLog.committed = uint64(len(r.RaftLog.entries))
+	// Append new entries - handle conflicts by deleting inconsistent entries
+	for i, entry := range m.Entries {
+		index := m.Index + 1 + uint64(i)
 
+		// If entry exists at this index with different term, delete it and all following
+		if index < uint64(len(r.RaftLog.entries)) && r.RaftLog.entries[index].Term != entry.Term {
+			r.RaftLog.entries = r.RaftLog.entries[:index]
+		}
+
+		// Append if not already present
+		if index >= uint64(len(r.RaftLog.entries)) {
+			r.RaftLog.entries = append(r.RaftLog.entries, *entry)
+		}
+	}
+
+	// Update committed index: min(leaderCommit, index of last new entry)
+	if m.Commit > r.RaftLog.committed {
+		lastNewEntry := m.Index + uint64(len(m.Entries))
+		if m.Commit < lastNewEntry {
+			r.RaftLog.committed = m.Commit
+		} else {
+			r.RaftLog.committed = lastNewEntry
+		}
+	}
+
+	// Send success response
 	r.msgs = append(r.msgs, pb.Message{
 		MsgType: pb.MessageType_MsgAppendResponse,
 		To:      m.From,
 		From:    r.id,
 		Term:    r.Term,
-		Commit:  r.RaftLog.committed,
+		Reject:  false,
 	})
 
 	return nil
