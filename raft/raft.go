@@ -865,7 +865,7 @@ func (r *Raft) removeNode(id uint64) {
 }
 
 func (r *Raft) tryAdvanceCommit() {
-	matchIndices := make([]uint64, len(r.Prs))
+	matchIndices := make([]uint64, 0, len(r.Prs))
 	for _, p := range r.Prs {
 		matchIndices = append(matchIndices, p.Match)
 	}
@@ -876,8 +876,13 @@ func (r *Raft) tryAdvanceCommit() {
 
 	majorityIndex := len(matchIndices) / 2
 	newCommit := matchIndices[majorityIndex]
-	if newCommit > r.RaftLog.committed {
-		r.RaftLog.committed = newCommit
-		log.Debugf("Advancing Node(%v) commit to %v", r.id, newCommit)
+
+	// Only commit entries from the current term (Raft safety requirement)
+	if newCommit > r.RaftLog.committed && newCommit > 0 && newCommit < uint64(len(r.RaftLog.entries)) {
+		if r.RaftLog.entries[newCommit].Term == r.Term {
+			r.RaftLog.committed = newCommit
+			log.Debug("MatchIndices: %v", matchIndices)
+			log.Debugf("Advancing Node(%v) commit to %v", r.id, newCommit)
+		}
 	}
 }
