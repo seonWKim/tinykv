@@ -16,6 +16,7 @@ package raft
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"sort"
 
@@ -423,9 +424,43 @@ func (h *FollowerRequestVoteHandler) Handle(r *Raft, m pb.Message) error {
 type FollowerAppendHandler struct{}
 
 func (h *FollowerAppendHandler) Handle(r *Raft, m pb.Message) error {
-	r.electionElapsed = 0
-	// Raft followers are passive and only learn the leader's identity through AppendEntries and HeartBeat messages
-	r.Lead = m.From
+	if m.Term >= r.Term {
+		r.electionElapsed = 0
+		r.Lead = m.From
+		r.Term = m.Term
+	}
+
+	lastIndex, err := r.RaftLog.storage.LastIndex()
+	if err != nil {
+		return fmt.Errorf("error retrieving last index: %v", err)
+	}
+
+	if m.Index != lastIndex {
+		// TODO: determine what we should do
+	}
+
+	lastTerm, err := r.RaftLog.storage.Term(lastIndex)
+	if err != nil {
+		return fmt.Errorf("error retrieving last term: %v", err)
+	}
+	if m.Term != lastTerm {
+		// TODO: determine what we should do
+	}
+
+	// TODO: committed means we stored the data into stable storage. Is it safe to increase commiitted here?
+	for _, entry := range m.Entries {
+		r.RaftLog.entries = append(r.RaftLog.entries, *entry)
+	}
+	r.RaftLog.committed = uint64(len(r.RaftLog.entries))
+
+	r.msgs = append(r.msgs, pb.Message{
+		MsgType: pb.MessageType_MsgAppendResponse,
+		To:      m.From,
+		From:    r.id,
+		Term:    r.Term,
+		Commit:  r.RaftLog.committed,
+	})
+
 	return nil
 }
 
